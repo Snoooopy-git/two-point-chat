@@ -1,0 +1,16 @@
+node_modules/
+dist/
+server/chat.db
+server/chat.db-shm
+server/chat.db-wal
+server/uploads/*
+!server/uploads/.gitkeep
+logs/
+.env
+*.log
+.DS_Store
+.claude/
+client/src/assets/hero.png
+client/src/assets/vite.svg
+client/public/favicon.svg
+client/public/icons.svg
