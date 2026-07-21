@@ -103,6 +103,22 @@ function setupChatSocket(io) {
       }
     });
 
+    // 标记消息已读
+    socket.on('mark_read', (data) => {
+      try {
+        const { from } = data;
+        const senderId = parseInt(from);
+        if (!senderId) return;
+
+        db.prepare(`
+          UPDATE messages SET read = 1
+          WHERE sender_id = ? AND receiver_id = ? AND read = 0
+        `).run(senderId, userId);
+      } catch (err) {
+        console.error('标记已读错误:', err);
+      }
+    });
+
     // 断开连接
     socket.on('disconnect', () => {
       console.log(`用户 ${userId} socket 断开`);

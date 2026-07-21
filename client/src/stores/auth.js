@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { api } from '../utils/api.js';
 import { connectSocket, disconnectSocket } from '../utils/socket.js';
+import { useChatStore } from './chat.js';
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null);
@@ -10,6 +11,14 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref(null);
 
   const isAuthenticated = computed(() => !!token.value);
+  const isAdmin = computed(() => user.value?.role === 'admin');
+
+  // 连接 socket 后立即初始化聊天监听器
+  function _setupSocket(tokenValue) {
+    connectSocket(tokenValue);
+    // Socket.io 允许在连接建立前注册监听器，无需延迟
+    useChatStore().initSocketListeners();
+  }
 
   // 初始化：从 localStorage 恢复 token
   function init() {
@@ -18,7 +27,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (savedToken && savedUser) {
       token.value = savedToken;
       user.value = JSON.parse(savedUser);
-      connectSocket(savedToken);
+      _setupSocket(savedToken);
     }
   }
 
@@ -31,7 +40,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = data.user;
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      connectSocket(data.token);
+      _setupSocket(data.token);
       return true;
     } catch (err) {
       error.value = err.message;
@@ -50,7 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = data.user;
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      connectSocket(data.token);
+      _setupSocket(data.token);
       return true;
     } catch (err) {
       error.value = err.message;
@@ -68,5 +77,5 @@ export const useAuthStore = defineStore('auth', () => {
     disconnectSocket();
   }
 
-  return { user, token, loading, error, isAuthenticated, init, login, register, logout };
+  return { user, token, loading, error, isAuthenticated, isAdmin, init, login, register, logout };
 });

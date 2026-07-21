@@ -38,6 +38,11 @@
       </div>
     </div>
 
+    <!-- 管理员入口 -->
+    <div v-if="authStore.isAdmin" class="admin-entry">
+      <button class="btn-admin" @click="$router.push('/admin')">⚙️ 后台管理</button>
+    </div>
+
     <!-- 好友列表 -->
     <div class="contacts-section">
       <h3 class="section-title">我的好友 ({{ chatStore.contacts.length }})</h3>
@@ -61,6 +66,9 @@
               {{ contact.lastMessage.type === 'image' ? '📷 图片' : contact.lastMessage.content }}
             </div>
           </div>
+          <div v-if="chatStore.unreadCounts[contact.id]" class="unread-badge">
+            {{ chatStore.unreadCounts[contact.id] > 99 ? '99+' : chatStore.unreadCounts[contact.id] }}
+          </div>
         </div>
       </div>
     </div>
@@ -72,7 +80,6 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useChatStore } from '../stores/chat.js';
-import { getSocket } from '../utils/socket.js';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -85,26 +92,6 @@ let searchTimer = null;
 
 onMounted(async () => {
   await chatStore.fetchContacts();
-
-  // 监听 socket 事件
-  const socket = getSocket();
-  if (socket) {
-    socket.on('new_message', (msg) => {
-      chatStore.receiveMessage(msg);
-    });
-    socket.on('message_sent', (msg) => {
-      chatStore.confirmMessage(msg);
-    });
-    socket.on('friend_online', (data) => {
-      chatStore.setUserOnline(data.userId);
-    });
-    socket.on('friend_offline', (data) => {
-      chatStore.setUserOffline(data.userId);
-    });
-    socket.on('message_error', (data) => {
-      alert(data.error || '消息发送失败');
-    });
-  }
 });
 
 function handleSearchInput() {
@@ -270,6 +257,24 @@ function handleLogout() {
   margin: 0;
 }
 
+.admin-entry {
+  padding: 10px 20px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+}
+
+.btn-admin {
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .empty-list {
   text-align: center;
   padding: 40px 20px;
@@ -343,5 +348,21 @@ function handleLogout() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 未读消息徽章 */
+.unread-badge {
+  background: #ff4757;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  flex-shrink: 0;
 }
 </style>

@@ -28,13 +28,15 @@ router.post('/register', (req, res) => {
 
     // 加密密码并创建用户
     const hashedPassword = bcrypt.hashSync(password, 10);
-    const result = db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').run(username, hashedPassword);
+    const adminUsername = process.env.ADMIN_USERNAME || '';
+    const role = (adminUsername && username === adminUsername) ? 'admin' : 'user';
+    const result = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(username, hashedPassword, role);
 
     const token = generateToken(result.lastInsertRowid);
     res.status(201).json({
       message: '注册成功',
       token,
-      user: { id: result.lastInsertRowid, username }
+      user: { id: result.lastInsertRowid, username, role }
     });
   } catch (err) {
     console.error('注册错误:', err);
@@ -51,9 +53,13 @@ router.post('/login', (req, res) => {
       return res.status(400).json({ error: '用户名和密码不能为空' });
     }
 
-    const user = db.prepare('SELECT id, username, password FROM users WHERE username = ?').get(username);
+    const user = db.prepare('SELECT id, username, password, status, role FROM users WHERE username = ?').get(username);
     if (!user) {
       return res.status(400).json({ error: '用户名或密码错误' });
+    }
+
+    if (user.status === 'disabled') {
+      return res.status(403).json({ error: '账号已被禁用，请联系管理员' });
     }
 
     const isPasswordValid = bcrypt.compareSync(password, user.password);
@@ -65,7 +71,7 @@ router.post('/login', (req, res) => {
     res.json({
       message: '登录成功',
       token,
-      user: { id: user.id, username: user.username }
+      user: { id: user.id, username: user.username, role: user.role }
     });
   } catch (err) {
     console.error('登录错误:', err);
@@ -76,7 +82,7 @@ router.post('/login', (req, res) => {
 // 获取当前用户信息
 router.get('/me', authMiddleware, (req, res) => {
   try {
-    const user = db.prepare('SELECT id, username, avatar, created_at FROM users WHERE id = ?').get(req.userId);
+    const user = db.prepare('SELECT id, username, avatar, role, created_at FROM users WHERE id = ?').get(req.userId);
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }

@@ -3,6 +3,7 @@
     <!-- 顶部导航 -->
     <header class="chat-header">
       <button class="btn-back" @click="goBack">← 返回</button>
+      <div class="header-avatar">{{ contactAvatar }}</div>
       <div class="header-info">
         <div class="header-name">
           {{ chatStore.activeContact?.username || '加载中...' }}
@@ -24,30 +25,49 @@
       <div
         v-for="msg in chatStore.activeMessages"
         :key="msg.id"
-        class="message-wrapper"
-        :class="{ 'message-self': msg.sender_id === 'self' || msg.sender_id === authStore.user?.id }"
+        class="message-row"
+        :class="{ 'row-self': isSelf(msg) }"
       >
-        <!-- 文字消息 -->
-        <div v-if="msg.type === 'text'" class="message-bubble">
-          {{ msg.content }}
+        <!-- 对方消息：头像在左 -->
+        <div v-if="!isSelf(msg)" class="msg-avatar">{{ contactAvatar }}</div>
+
+        <div
+          class="message-wrapper"
+          :class="{ 'message-self': isSelf(msg) }"
+        >
+          <!-- 文字消息 -->
+          <div v-if="msg.type === 'text'" class="message-bubble">
+            {{ msg.content }}
+          </div>
+          <!-- 图片消息 -->
+          <div v-else-if="msg.type === 'image'" class="message-bubble message-image">
+            <img
+              :src="msg.file_url || msg.content"
+              alt="图片"
+              class="chat-image"
+              @click="previewImage(msg.file_url || msg.content)"
+              loading="lazy"
+            />
+          </div>
+          <div class="message-time">{{ formatTime(msg.created_at) }}</div>
         </div>
-        <!-- 图片消息 -->
-        <div v-else-if="msg.type === 'image'" class="message-bubble message-image">
-          <img
-            :src="msg.file_url || msg.content"
-            alt="图片"
-            class="chat-image"
-            @click="previewImage(msg.file_url || msg.content)"
-            loading="lazy"
-          />
-        </div>
-        <div class="message-time">{{ formatTime(msg.created_at) }}</div>
+
+        <!-- 自己消息：头像在右 -->
+        <div v-if="isSelf(msg)" class="msg-avatar msg-avatar-self">{{ myAvatar }}</div>
       </div>
     </div>
 
     <!-- 输入区 -->
     <div class="chat-input-bar">
       <ImageUpload @uploaded="handleImageUploaded" />
+      <button class="btn-emoji" @click="showEmoji = !showEmoji" title="表情">
+        😊
+      </button>
+      <EmojiPicker
+        :visible="showEmoji"
+        @select="insertEmoji"
+        @close="showEmoji = false"
+      />
       <textarea
         v-model="inputText"
         class="text-input"
@@ -74,12 +94,13 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useChatStore } from '../stores/chat.js';
 import { getSocket } from '../utils/socket.js';
 import ImageUpload from '../components/ImageUpload.vue';
+import EmojiPicker from '../components/EmojiPicker.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -90,25 +111,24 @@ const inputText = ref('');
 const messageListRef = ref(null);
 const inputRef = ref(null);
 const previewUrl = ref(null);
+const showEmoji = ref(false);
 
 let typingTimer = null;
+
+// 头像：取用户名的首字
+const myAvatar = computed(() => (authStore.user?.username || '我')[0].toUpperCase());
+const contactAvatar = computed(() => (chatStore.activeContact?.username || '?')[0].toUpperCase());
+
+function isSelf(msg) {
+  return msg.sender_id === 'self' || msg.sender_id === authStore.user?.id;
+}
 
 onMounted(async () => {
   const userId = parseInt(route.params.userId);
   await chatStore.openChat(userId);
 
-  // 监听 socket 事件
   const socket = getSocket();
   if (socket) {
-    socket.on('new_message', (msg) => {
-      if (msg.from === userId) {
-        chatStore.receiveMessage(msg);
-        scrollToBottom();
-      }
-    });
-    socket.on('message_sent', (msg) => {
-      chatStore.confirmMessage(msg);
-    });
     socket.on('typing', (data) => {
       if (data.from === userId) {
         chatStore.setTyping(data.from);
@@ -127,17 +147,15 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  // 清理 typing 状态
+  chatStore.activeContactId = null;
+
   const socket = getSocket();
   if (socket) {
     socket.off('typing');
     socket.off('stop_typing');
-    socket.off('new_message');
-    socket.off('message_sent');
   }
 });
 
-// 当切换到新的聊天对象时，滚动到底部
 watch(() => chatStore.activeMessages.length, () => {
   nextTick(() => scrollToBottom());
 });
@@ -152,9 +170,9 @@ function handleSendText() {
   if (!inputText.value.trim()) return;
   chatStore.sendTextMessage(inputText.value.trim());
   inputText.value = '';
+  showEmoji.value = false;
   nextTick(() => scrollToBottom());
 
-  // 通知对方停止输入
   const socket = getSocket();
   if (socket && chatStore.activeContactId) {
     socket.emit('stop_typing', { to: chatStore.activeContactId });
@@ -170,6 +188,22 @@ function handleTyping() {
       socket.emit('stop_typing', { to: chatStore.activeContactId });
     }, 2000);
   }
+}
+
+function insertEmoji(emoji) {
+  const el = inputRef.value;
+  if (!el) {
+    inputText.value += emoji;
+    return;
+  }
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  inputText.value = inputText.value.slice(0, start) + emoji + inputText.value.slice(end);
+  // 恢复光标位置
+  nextTick(() => {
+    el.focus();
+    el.selectionStart = el.selectionEnd = start + emoji.length;
+  });
 }
 
 function handleImageUploaded(fileUrl) {
@@ -218,7 +252,7 @@ function formatTime(timestamp) {
   padding: 14px 16px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
@@ -230,6 +264,19 @@ function formatTime(timestamp) {
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
+}
+
+.header-avatar {
+  width: 38px;
+  height: 38px;
+  background: rgba(255,255,255,0.25);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .header-info {
@@ -276,7 +323,7 @@ function formatTime(timestamp) {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .empty-chat {
@@ -291,15 +338,44 @@ function formatTime(timestamp) {
   margin-top: 8px;
 }
 
+/* 消息行：头像 + 气泡 */
+.message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.row-self {
+  justify-content: flex-end;
+}
+
+/* 消息小头像 */
+.msg-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.msg-avatar-self {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  max-width: 70%;
-  align-self: flex-start;
+  max-width: 65%;
 }
 
 .message-self {
-  align-self: flex-end;
+  align-items: flex-end;
 }
 
 .message-bubble {
@@ -310,7 +386,7 @@ function formatTime(timestamp) {
   word-break: break-word;
 }
 
-.message-wrapper:not(.message-self) .message-bubble {
+.message-row:not(.row-self) .message-bubble {
   background: #fff;
   border-bottom-left-radius: 4px;
 }
@@ -352,6 +428,17 @@ function formatTime(timestamp) {
   padding: 12px 16px;
   background: #fff;
   border-top: 1px solid #eee;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.btn-emoji {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
   flex-shrink: 0;
 }
 

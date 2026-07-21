@@ -38,8 +38,17 @@ export const api = {
   post(url, body) {
     return request(url, {
       method: 'POST',
-      body: JSON.stringify(body)
+      body: body ? JSON.stringify(body) : undefined
     });
+  },
+  put(url, body) {
+    return request(url, {
+      method: 'PUT',
+      body: body ? JSON.stringify(body) : undefined
+    });
+  },
+  delete(url) {
+    return request(url, { method: 'DELETE' });
   },
   upload(url, formData) {
     const token = getToken();

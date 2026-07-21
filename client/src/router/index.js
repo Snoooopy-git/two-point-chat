@@ -29,6 +29,12 @@ const routes = [
     name: 'Chat',
     component: () => import('../views/Chat.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin',
+    name: 'Admin',
+    component: () => import('../views/Admin.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
   }
 ];
 
@@ -44,6 +50,8 @@ router.beforeEach((to, from, next) => {
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login');
+  } else if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    next('/contacts');
   } else if (to.meta.guest && isAuthenticated) {
     next('/contacts');
   } else {

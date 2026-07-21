@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { api } from '../utils/api.js';
 import { getSocket } from '../utils/socket.js';
+import { showBrowserNotification } from '../utils/notifications.js';
 
 export const useChatStore = defineStore('chat', () => {
   const contacts = ref([]);
@@ -10,6 +11,10 @@ export const useChatStore = defineStore('chat', () => {
   const loading = ref(false);
   const searchResults = ref([]);
   const typingUsers = ref({});     // { [userId]: true }
+  const unreadCounts = ref({});    // { [contactId]: count }
+
+  // 全局监听器初始化标志
+  let _listenersInitialized = false;
 
   const activeContact = computed(() =>
     contacts.value.find(c => c.id === activeContactId.value)
@@ -17,6 +22,11 @@ export const useChatStore = defineStore('chat', () => {
 
   const activeMessages = computed(() =>
     messages.value[activeContactId.value] || []
+  );
+
+  // 总未读数
+  const totalUnread = computed(() =>
+    Object.values(unreadCounts.value).reduce((sum, c) => sum + c, 0)
   );
 
   const sortedContacts = computed(() =>
@@ -27,6 +37,43 @@ export const useChatStore = defineStore('chat', () => {
     })
   );
 
+  // ============= 全局 Socket 监听器（只初始化一次） =============
+
+  function initSocketListeners() {
+    if (_listenersInitialized) return;
+    const socket = getSocket();
+    if (!socket) {
+      // socket 还没连接好，延迟重试
+      setTimeout(() => initSocketListeners(), 500);
+      return;
+    }
+
+    socket.on('new_message', (msg) => {
+      receiveMessage(msg);
+    });
+
+    socket.on('message_sent', (msg) => {
+      confirmMessage(msg);
+    });
+
+    socket.on('friend_online', (data) => {
+      setUserOnline(data.userId);
+    });
+
+    socket.on('friend_offline', (data) => {
+      setUserOffline(data.userId);
+    });
+
+    socket.on('message_error', (data) => {
+      console.error('消息发送失败:', data.error);
+    });
+
+    _listenersInitialized = true;
+    console.log('✅ 全局 Socket 监听器已初始化');
+  }
+
+  // ============= 联系人 =============
+
   // 获取好友列表
   async function fetchContacts() {
     try {
@@ -35,8 +82,24 @@ export const useChatStore = defineStore('chat', () => {
         ...f,
         online: false
       }));
+      // 拉取未读数
+      await fetchUnreadCounts();
     } catch (err) {
       console.error('获取好友列表失败:', err);
+    }
+  }
+
+  // 获取未读消息数
+  async function fetchUnreadCounts() {
+    try {
+      const data = await api.get('/api/messages/unread/counts');
+      const counts = {};
+      (data.counts || []).forEach(c => {
+        counts[c.sender_id] = c.count;
+      });
+      unreadCounts.value = counts;
+    } catch (err) {
+      console.error('获取未读数失败:', err);
     }
   }
 
@@ -65,6 +128,8 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // ============= 消息 =============
+
   // 获取历史消息
   async function fetchMessages(contactId) {
     try {
@@ -80,6 +145,25 @@ export const useChatStore = defineStore('chat', () => {
     activeContactId.value = contactId;
     if (!messages.value[contactId]) {
       await fetchMessages(contactId);
+    }
+    // 标记该联系人的消息为已读
+    markAsRead(contactId);
+  }
+
+  // 标记消息已读
+  function markAsRead(contactId) {
+    // 清除本地未读计数
+    unreadCounts.value[contactId] = 0;
+
+    // 通过 HTTP API 标记已读
+    api.put(`/api/messages/${contactId}/read`).catch(err => {
+      console.error('标记已读失败:', err);
+    });
+
+    // 通过 Socket 通知对方（如果在线）
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('mark_read', { from: contactId });
     }
   }
 
@@ -102,6 +186,7 @@ export const useChatStore = defineStore('chat', () => {
       content,
       type: 'text',
       file_url: null,
+      read: 1,
       created_at: new Date().toISOString(),
       _temp: true
     };
@@ -134,6 +219,7 @@ export const useChatStore = defineStore('chat', () => {
       content: fileUrl,
       type: 'image',
       file_url: fileUrl,
+      read: 1,
       created_at: new Date().toISOString(),
       _temp: true
     };
@@ -146,7 +232,7 @@ export const useChatStore = defineStore('chat', () => {
     socket.emit('private_message', messageData);
   }
 
-  // 接收消息（由 socket 事件触发）
+  // 接收消息（由全局 socket 事件触发）
   function receiveMessage(msg) {
     const contactId = msg.from;
     if (!messages.value[contactId]) {
@@ -159,17 +245,33 @@ export const useChatStore = defineStore('chat', () => {
       content: msg.content,
       type: msg.type || 'text',
       file_url: msg.fileUrl || null,
+      read: 0,
       created_at: msg.timestamp || new Date().toISOString()
     });
 
     // 更新好友列表中的最后一条消息
     const contact = contacts.value.find(c => c.id === contactId);
+    const contactName = contact?.username || '新消息';
     if (contact) {
       contact.lastMessage = {
         content: msg.type === 'image' ? '[图片]' : msg.content,
         type: msg.type || 'text',
         created_at: msg.timestamp || new Date().toISOString()
       };
+    }
+
+    // 如果不是正在查看该联系人，增加未读计数
+    if (activeContactId.value !== contactId) {
+      if (!unreadCounts.value[contactId]) {
+        unreadCounts.value[contactId] = 0;
+      }
+      unreadCounts.value[contactId]++;
+
+      // 发送浏览器桌面通知
+      showBrowserNotification(
+        contactName,
+        msg.type === 'image' ? '📷 发送了一张图片' : msg.content
+      );
     }
   }
 
@@ -188,7 +290,8 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // 更新好友在线状态
+  // ============= 在线状态 =============
+
   function setUserOnline(userId) {
     const contact = contacts.value.find(c => c.id === userId);
     if (contact) {
@@ -203,10 +306,10 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // 正在输入状态
+  // ============= 输入状态 =============
+
   function setTyping(userId) {
     typingUsers.value[userId] = true;
-    // 3 秒后自动清除
     setTimeout(() => {
       typingUsers.value[userId] = false;
     }, 3000);
@@ -223,14 +326,19 @@ export const useChatStore = defineStore('chat', () => {
     loading,
     searchResults,
     typingUsers,
+    unreadCounts,
+    totalUnread,
     activeContact,
     activeMessages,
     sortedContacts,
+    initSocketListeners,
     fetchContacts,
+    fetchUnreadCounts,
     searchUsers,
     addFriend,
     fetchMessages,
     openChat,
+    markAsRead,
     sendTextMessage,
     sendImageMessage,
     receiveMessage,

@@ -35,10 +35,28 @@ db.exec(`
     content TEXT NOT NULL,
     type TEXT DEFAULT 'text',
     file_url TEXT DEFAULT NULL,
+    read INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (sender_id) REFERENCES users(id),
     FOREIGN KEY (receiver_id) REFERENCES users(id)
   );
 `);
+
+// 数据库迁移
+const migrations = [
+  { name: 'messages.read', sql: 'ALTER TABLE messages ADD COLUMN read INTEGER DEFAULT 0' },
+  { name: 'users.role', sql: "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'" },
+  { name: 'users.status', sql: "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'" },
+  { name: 'messages.deleted', sql: 'ALTER TABLE messages ADD COLUMN deleted INTEGER DEFAULT 0' }
+];
+
+for (const migration of migrations) {
+  try {
+    db.exec(migration.sql);
+    console.log(`✅ 数据库迁移：已添加 ${migration.name} 列`);
+  } catch (e) {
+    // 列已存在，忽略
+  }
+}
 
 module.exports = db;
