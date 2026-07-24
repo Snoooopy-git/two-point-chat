@@ -1,19 +1,31 @@
 {
   "name": "two-point-chat",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "双人在线聊天工具",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
     "dev:server": "node server/index.js",
     "dev:client": "cd client && npm run dev",
-    "build": "cd client && npm run build"
+    "build": "cd client && npm run build",
+    "lint": "eslint .",
+    "test": "node --test",
+    "test:smoke": "node --test test/smoke.test.js",
+    "governance:check": "node scripts/check-governance.js",
+    "check": "npm run governance:check && npm run lint && npm test && npm run build",
+    "db:backup": "node scripts/backup-database.js",
+    "db:verify": "node scripts/verify-database.js",
+    "db:recovery-drill": "node scripts/recovery-drill.js",
+    "admin:promote": "node scripts/set-admin.js"
   },
   "keywords": [
     "chat",
     "vue",
     "socket.io"
   ],
+  "engines": {
+    "node": "^20.19.0 || >=22.13.0"
+  },
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -23,5 +35,11 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.7.0",
+    "eslint-plugin-vue": "^10.10.0",
+    "globals": "^17.7.0"
   }
 }

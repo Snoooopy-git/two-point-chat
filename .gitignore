@@ -6,7 +6,13 @@ server/chat.db-wal
 server/uploads/*
 !server/uploads/.gitkeep
 logs/
-.env
+.env*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+*.db.bak*
+backups/
 *.log
 .DS_Store
 .claude/

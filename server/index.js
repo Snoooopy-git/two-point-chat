@@ -30,13 +30,17 @@ const io = new Server(server, {
 });
 
 // 中间件
-app.use(cors(isProduction ? {} : { origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
-app.use(express.json());
-
-// 生产环境安全检查
-if (isProduction && process.env.JWT_SECRET === 'two-point-chat-secret-key-2026') {
-  console.warn('⚠️  警告: 生产环境使用了默认 JWT_SECRET，请设置环境变量 JWT_SECRET');
+if (!isProduction) {
+  app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
 }
+app.disable('x-powered-by');
+app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
 
 // 静态文件服务 - 上传的图片
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
@@ -81,21 +85,61 @@ app.get('/{*path}', (req, res) => {
 // 设置 Socket.io 聊天
 setupChatSocket(io);
 
-// 启动服务
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`✅ 聊天服务已启动: http://127.0.0.1:${PORT}`);
-  console.log(`   环境: ${isProduction ? '生产' : '开发'}`);
-  console.log(`   API: http://127.0.0.1:${PORT}/api`);
-  console.log(`   健康检查: http://127.0.0.1:${PORT}/api/health`);
-});
-
-// 优雅关闭
-process.on('SIGINT', () => {
-  console.log('\n正在关闭服务...');
-  server.close(() => {
-    console.log('服务已关闭');
-    process.exit(0);
+function startServer(port = PORT, host = '127.0.0.1') {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      resolve(server.address());
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(port, host);
   });
-});
+}
 
-module.exports = { app, server, io };
+function stopServer() {
+  return new Promise((resolve, reject) => {
+    if (!server.listening) {
+      resolve();
+      return;
+    }
+    server.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+if (require.main === module) {
+  startServer().then((address) => {
+    const actualPort = address.port;
+    console.log(`✅ 聊天服务已启动: http://127.0.0.1:${actualPort}`);
+    console.log(`   环境: ${isProduction ? '生产' : '开发'}`);
+    console.log(`   API: http://127.0.0.1:${actualPort}/api`);
+    console.log(`   健康检查: http://127.0.0.1:${actualPort}/api/health`);
+  }).catch((error) => {
+    console.error('服务启动失败:', error);
+    process.exit(1);
+  });
+
+  const shutdown = async () => {
+    console.log('\n正在关闭服务...');
+    try {
+      await stopServer();
+      console.log('服务已关闭');
+      process.exit(0);
+    } catch (error) {
+      console.error('服务关闭失败:', error);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
+module.exports = { app, server, io, startServer, stopServer };

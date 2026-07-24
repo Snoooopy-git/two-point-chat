@@ -16,7 +16,7 @@ function setupChatSocket(io) {
       const decoded = jwt.verify(token, JWT_SECRET);
       socket.userId = decoded.userId;
       next();
-    } catch (err) {
+    } catch {
       next(new Error('登录已过期'));
     }
   });

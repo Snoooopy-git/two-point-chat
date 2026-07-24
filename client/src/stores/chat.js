@@ -124,7 +124,7 @@ export const useChatStore = defineStore('chat', () => {
       await fetchContacts();
       return data;
     } catch (err) {
-      throw new Error(err.message || '添加好友失败');
+      throw new Error(err.message || '添加好友失败', { cause: err });
     }
   }
 

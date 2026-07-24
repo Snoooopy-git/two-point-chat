@@ -28,8 +28,7 @@ router.post('/register', (req, res) => {
 
     // 加密密码并创建用户
     const hashedPassword = bcrypt.hashSync(password, 10);
-    const adminUsername = process.env.ADMIN_USERNAME || '';
-    const role = (adminUsername && username === adminUsername) ? 'admin' : 'user';
+    const role = 'user';
     const result = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(username, hashedPassword, role);
 
     const token = generateToken(result.lastInsertRowid);

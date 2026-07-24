@@ -1,7 +1,9 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const dbPath = path.join(__dirname, 'chat.db');
+const dbPath = process.env.CHAT_DB_PATH
+  ? path.resolve(process.env.CHAT_DB_PATH)
+  : path.join(__dirname, 'chat.db');
 const db = new Database(dbPath);
 
 // 启用 WAL 模式提升性能
@@ -15,6 +17,8 @@ db.exec(`
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     avatar TEXT DEFAULT NULL,
+    role TEXT DEFAULT 'user',
+    status TEXT DEFAULT 'active',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -36,27 +40,36 @@ db.exec(`
     type TEXT DEFAULT 'text',
     file_url TEXT DEFAULT NULL,
     read INTEGER DEFAULT 0,
+    deleted INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (sender_id) REFERENCES users(id),
     FOREIGN KEY (receiver_id) REFERENCES users(id)
   );
 `);
 
-// 数据库迁移
-const migrations = [
-  { name: 'messages.read', sql: 'ALTER TABLE messages ADD COLUMN read INTEGER DEFAULT 0' },
-  { name: 'users.role', sql: "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'" },
-  { name: 'users.status', sql: "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'" },
-  { name: 'messages.deleted', sql: 'ALTER TABLE messages ADD COLUMN deleted INTEGER DEFAULT 0' }
-];
-
-for (const migration of migrations) {
-  try {
-    db.exec(migration.sql);
-    console.log(`✅ 数据库迁移：已添加 ${migration.name} 列`);
-  } catch (e) {
-    // 列已存在，忽略
+function ensureColumn(table, column, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!columns.some(item => item.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 }
+
+const migrate = db.transaction(() => {
+  ensureColumn('messages', 'read', 'INTEGER DEFAULT 0');
+  ensureColumn('users', 'role', "TEXT DEFAULT 'user'");
+  ensureColumn('users', 'status', "TEXT DEFAULT 'active'");
+  ensureColumn('messages', 'deleted', 'INTEGER DEFAULT 0');
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_friendships_user_friend
+      ON friendships(user_id, friend_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_conversation
+      ON messages(sender_id, receiver_id, created_at, id);
+    CREATE INDEX IF NOT EXISTS idx_messages_unread
+      ON messages(receiver_id, read, deleted, sender_id);
+  `);
+});
+
+migrate();
 
 module.exports = db;
