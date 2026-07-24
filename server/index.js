@@ -17,6 +17,9 @@ const server = http.createServer(app);
 
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = process.env.PORT || 3000;
+const uploadPath = process.env.CHAT_UPLOAD_PATH
+  ? path.resolve(process.env.CHAT_UPLOAD_PATH)
+  : path.join(__dirname, 'uploads');
 
 // Socket.io CORS 配置
 const io = new Server(server, {
@@ -28,6 +31,7 @@ const io = new Server(server, {
   pingTimeout: 60000,
   pingInterval: 25000
 });
+app.set('io', io);
 
 // 中间件
 if (!isProduction) {
@@ -43,8 +47,12 @@ app.use((req, res, next) => {
 });
 
 // 静态文件服务 - 上传的图片
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-  maxAge: isProduction ? '7d' : 0
+app.use('/uploads', express.static(uploadPath, {
+  maxAge: isProduction ? '7d' : 0,
+  setHeaders(res) {
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
 }));
 
 // API 路由
@@ -61,6 +69,10 @@ app.get('/api/health', (req, res) => {
     time: new Date().toISOString(),
     uptime: process.uptime()
   });
+});
+
+app.all('/api/{*path}', (req, res) => {
+  res.status(404).json({ error: 'API 接口不存在' });
 });
 
 // 生产环境下托管前端静态文件

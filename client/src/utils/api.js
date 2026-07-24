@@ -22,7 +22,7 @@ async function request(url, options = {}) {
     headers
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     throw new Error(data.error || '请求失败');
@@ -61,6 +61,15 @@ export const api = {
       method: 'POST',
       headers,
       body: formData
-    }).then(res => res.json());
+    }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || '图片上传失败');
+      }
+      if (typeof data.fileUrl !== 'string') {
+        throw new Error('上传响应格式无效');
+      }
+      return data;
+    });
   }
 };

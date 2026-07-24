@@ -21,6 +21,7 @@ test('database creates the complete current schema', () => {
   assert.ok(userColumns.includes('status'));
   assert.ok(messageColumns.includes('read'));
   assert.ok(messageColumns.includes('deleted'));
+  assert.ok(messageColumns.includes('client_message_id'));
 });
 
 test('database creates query indexes and passes integrity check', () => {
@@ -30,5 +31,6 @@ test('database creates query indexes and passes integrity check', () => {
 
   assert.ok(indexes.includes('idx_messages_conversation'));
   assert.ok(indexes.includes('idx_messages_unread'));
+  assert.ok(indexes.includes('idx_messages_sender_client_id'));
   assert.deepEqual(db.pragma('integrity_check'), [{ integrity_check: 'ok' }]);
 });

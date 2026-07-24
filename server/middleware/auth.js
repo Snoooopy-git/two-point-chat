@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const db = require('../db');
 
 const WEAK_SECRET_PATTERN = /(change|default|example|please|secret-key|replace)/i;
 
@@ -28,6 +29,12 @@ function generateToken(userId) {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
 }
 
+function getActiveUser(userId) {
+  return db.prepare(
+    "SELECT id, username, avatar, role, status, created_at FROM users WHERE id = ? AND status = 'active'"
+  ).get(userId);
+}
+
 // JWT 认证中间件
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -38,7 +45,12 @@ function authMiddleware(req, res, next) {
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.userId;
+    const user = getActiveUser(decoded.userId);
+    if (!user) {
+      return res.status(401).json({ error: '账号不存在或已被禁用，请重新登录' });
+    }
+    req.userId = user.id;
+    req.user = user;
     next();
   } catch {
     return res.status(401).json({ error: '登录已过期，请重新登录' });
@@ -50,5 +62,6 @@ module.exports = {
   generateToken,
   isWeakJwtSecret,
   resolveJwtSecret,
+  getActiveUser,
   JWT_SECRET
 };

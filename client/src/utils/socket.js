@@ -4,13 +4,12 @@ import { io } from 'socket.io-client';
 let socket = null;
 
 export function connectSocket(token) {
-  if (socket) {
-    socket.disconnect();
-  }
+  disconnectSocket();
 
   socket = io({
     auth: { token },
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    autoConnect: false
   });
 
   socket.on('connect', () => {
@@ -28,12 +27,17 @@ export function connectSocket(token) {
   return socket;
 }
 
+export function startSocket() {
+  socket?.connect();
+}
+
 export function getSocket() {
   return socket;
 }
 
 export function disconnectSocket() {
   if (socket) {
+    socket.removeAllListeners();
     socket.disconnect();
     socket = null;
   }

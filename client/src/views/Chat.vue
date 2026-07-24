@@ -18,6 +18,13 @@
 
     <!-- 消息列表 -->
     <div class="message-list" ref="messageListRef">
+      <button
+        v-if="chatStore.activeHistoryCursor"
+        class="btn-load-older"
+        @click="loadOlder"
+      >
+        加载更早消息
+      </button>
       <div v-if="chatStore.activeMessages.length === 0" class="empty-chat">
         <p>开始你们的聊天吧！</p>
         <p class="empty-hint">发送一条消息打个招呼</p>
@@ -49,7 +56,18 @@
               loading="lazy"
             />
           </div>
-          <div class="message-time">{{ formatTime(msg.created_at) }}</div>
+          <div class="message-time">
+            {{ formatTime(msg.created_at) }}
+            <span v-if="msg._temp"> · 发送中</span>
+            <button
+              v-if="msg._error"
+              class="message-error"
+              :title="msg._errorMessage"
+              @click="chatStore.retryMessage(msg.client_message_id)"
+            >
+              发送失败，点击重试
+            </button>
+          </div>
         </div>
 
         <!-- 自己消息：头像在右 -->
@@ -168,7 +186,8 @@ function scrollToBottom() {
 
 function handleSendText() {
   if (!inputText.value.trim()) return;
-  chatStore.sendTextMessage(inputText.value.trim());
+  const sent = chatStore.sendTextMessage(inputText.value.trim());
+  if (!sent) return;
   inputText.value = '';
   showEmoji.value = false;
   nextTick(() => scrollToBottom());
@@ -207,8 +226,21 @@ function insertEmoji(emoji) {
 }
 
 function handleImageUploaded(fileUrl) {
-  chatStore.sendImageMessage(fileUrl);
+  if (!chatStore.sendImageMessage(fileUrl)) {
+    alert('连接尚未建立，请稍后重试');
+    return;
+  }
   nextTick(() => scrollToBottom());
+}
+
+async function loadOlder() {
+  const list = messageListRef.value;
+  const previousHeight = list?.scrollHeight || 0;
+  await chatStore.loadOlderMessages();
+  await nextTick();
+  if (list) {
+    list.scrollTop += list.scrollHeight - previousHeight;
+  }
 }
 
 function previewImage(url) {
@@ -338,6 +370,16 @@ function formatTime(timestamp) {
   margin-top: 8px;
 }
 
+.btn-load-older {
+  align-self: center;
+  border: none;
+  border-radius: 14px;
+  padding: 6px 14px;
+  color: #667eea;
+  background: #fff;
+  cursor: pointer;
+}
+
 /* 消息行：头像 + 气泡 */
 .message-row {
   display: flex;
@@ -419,6 +461,15 @@ function formatTime(timestamp) {
 
 .message-self .message-time {
   text-align: right;
+}
+
+.message-error {
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: #ff4757;
+  cursor: pointer;
+  font-size: inherit;
 }
 
 .chat-input-bar {

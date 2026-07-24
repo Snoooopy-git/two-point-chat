@@ -2,8 +2,17 @@ const express = require('express');
 const db = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { adminMiddleware } = require('../middleware/admin');
+const { disconnectUser } = require('../socket/chat');
 
 const router = express.Router();
+
+function isLastActiveAdmin(user) {
+  if (user.role !== 'admin' || user.status !== 'active') return false;
+  const row = db.prepare(
+    "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND status = 'active'"
+  ).get();
+  return row.count <= 1;
+}
 
 // 所有 admin 路由都需要认证 + 管理员权限
 router.use(authMiddleware);
@@ -32,12 +41,21 @@ router.put('/users/:id/status', (req, res) => {
       return res.status(400).json({ error: '状态值无效' });
     }
 
-    const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(id);
+    const user = db.prepare(
+      'SELECT id, username, role, status FROM users WHERE id = ?'
+    ).get(id);
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
 
+    if (status === 'disabled' && isLastActiveAdmin(user)) {
+      return res.status(400).json({ error: '不能禁用最后一个有效管理员' });
+    }
+
     db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, id);
+    if (status === 'disabled') {
+      disconnectUser(req.app.get('io'), user.id);
+    }
     res.json({ message: `用户「${user.username}」已${status === 'active' ? '启用' : '禁用'}` });
   } catch (err) {
     console.error('更新用户状态错误:', err);
@@ -55,7 +73,9 @@ router.put('/users/:id/role', (req, res) => {
       return res.status(400).json({ error: '角色值无效' });
     }
 
-    const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(id);
+    const user = db.prepare(
+      'SELECT id, username, role, status FROM users WHERE id = ?'
+    ).get(id);
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
@@ -63,6 +83,9 @@ router.put('/users/:id/role', (req, res) => {
     // 禁止修改自己的角色（防止误操作把自己降级）
     if (parseInt(id) === req.userId && role === 'user') {
       return res.status(400).json({ error: '不能取消自己的管理员权限' });
+    }
+    if (role === 'user' && isLastActiveAdmin(user)) {
+      return res.status(400).json({ error: '不能取消最后一个有效管理员的权限' });
     }
 
     db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
@@ -78,7 +101,9 @@ router.delete('/users/:id', (req, res) => {
   try {
     const { id } = req.params;
 
-    const user = db.prepare('SELECT id, username FROM users WHERE id = ?').get(id);
+    const user = db.prepare(
+      'SELECT id, username, role, status FROM users WHERE id = ?'
+    ).get(id);
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
@@ -100,6 +125,7 @@ router.delete('/users/:id', (req, res) => {
       db.prepare('DELETE FROM users WHERE id = ?').run(id);
     });
     transaction();
+    disconnectUser(req.app.get('io'), user.id, '账号已被删除，请重新登录');
 
     res.json({ message: `用户「${user.username}」已删除` });
   } catch (err) {

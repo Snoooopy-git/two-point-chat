@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { api } from '../utils/api.js';
-import { connectSocket, disconnectSocket } from '../utils/socket.js';
+import { connectSocket, disconnectSocket, startSocket } from '../utils/socket.js';
 import { useChatStore } from './chat.js';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -15,9 +15,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 连接 socket 后立即初始化聊天监听器
   function _setupSocket(tokenValue) {
-    connectSocket(tokenValue);
-    // Socket.io 允许在连接建立前注册监听器，无需延迟
-    useChatStore().initSocketListeners();
+    const socket = connectSocket(tokenValue);
+    useChatStore().initSocketListeners(socket);
+    socket.once('session_revoked', () => {
+      logout();
+      window.location.assign('/login');
+    });
+    startSocket();
   }
 
   // 初始化：从 localStorage 恢复 token
@@ -70,11 +74,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
+    useChatStore().resetState();
+    disconnectSocket();
     user.value = null;
     token.value = null;
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    disconnectSocket();
   }
 
   return { user, token, loading, error, isAuthenticated, isAdmin, init, login, register, logout };

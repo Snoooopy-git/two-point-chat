@@ -26,8 +26,8 @@ router.get('/search', authMiddleware, (req, res) => {
 // 添加好友
 router.post('/friends', authMiddleware, (req, res) => {
   try {
-    const { friendId } = req.body;
-    if (!friendId) {
+    const friendId = Number.parseInt(req.body.friendId, 10);
+    if (!Number.isInteger(friendId) || friendId <= 0) {
       return res.status(400).json({ error: '请指定要添加的好友' });
     }
     if (friendId === req.userId) {
@@ -40,20 +40,20 @@ router.post('/friends', authMiddleware, (req, res) => {
       return res.status(404).json({ error: '用户不存在' });
     }
 
-    // 检查是否已经是好友
-    const existing = db.prepare(
-      'SELECT id FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)'
-    ).get(req.userId, friendId, friendId, req.userId);
+    const addFriendship = db.transaction(() => {
+      const insert = db.prepare(
+        'INSERT OR IGNORE INTO friendships (user_id, friend_id) VALUES (?, ?)'
+      );
+      const first = insert.run(req.userId, friendId);
+      const second = insert.run(friendId, req.userId);
+      return first.changes + second.changes;
+    });
+    const changes = addFriendship();
 
-    if (existing) {
-      return res.status(400).json({ error: '对方已经是你的好友' });
-    }
-
-    // 双向添加好友关系
-    db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(req.userId, friendId);
-    db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(friendId, req.userId);
-
-    res.status(201).json({ message: '添加好友成功', friend: { id: friend.id, username: friend.username } });
+    res.status(changes > 0 ? 201 : 200).json({
+      message: changes > 0 ? '添加好友成功' : '对方已经是你的好友',
+      friend: { id: friend.id, username: friend.username }
+    });
   } catch (err) {
     console.error('添加好友错误:', err);
     res.status(500).json({ error: '服务器错误' });
@@ -75,8 +75,9 @@ router.get('/friends', authMiddleware, (req, res) => {
     const friendsWithLastMsg = friends.map(friend => {
       const lastMsg = db.prepare(`
         SELECT content, type, created_at FROM messages
-        WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-        ORDER BY created_at DESC LIMIT 1
+        WHERE ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
+          AND deleted = 0
+        ORDER BY id DESC LIMIT 1
       `).get(req.userId, friend.id, friend.id, req.userId);
 
       return {

@@ -1,12 +1,106 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db');
-const { JWT_SECRET } = require('../middleware/auth');
+const { JWT_SECRET, getActiveUser } = require('../middleware/auth');
 
-// 在线用户映射：userId -> Set of socket IDs
 const onlineUsers = new Map();
+const MAX_TEXT_LENGTH = 5000;
+const CLIENT_MESSAGE_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
+
+function getUserSockets(userId) {
+  if (!onlineUsers.has(userId)) {
+    onlineUsers.set(userId, new Set());
+  }
+  return onlineUsers.get(userId);
+}
+
+function emitToUser(io, userId, event, payload) {
+  const socketIds = onlineUsers.get(userId);
+  if (!socketIds) return;
+  socketIds.forEach(socketId => io.to(socketId).emit(event, payload));
+}
+
+function areFriends(userId, friendId) {
+  return Boolean(db.prepare(
+    'SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?'
+  ).get(userId, friendId));
+}
+
+function requireActiveSocketUser(socket) {
+  if (getActiveUser(socket.userId)) return true;
+  socket.emit('session_revoked', { error: '账号不存在或已被禁用，请重新登录' });
+  socket.disconnect(true);
+  return false;
+}
+
+function normalizeMessage(data) {
+  const receiverId = Number.parseInt(data?.to, 10);
+  const type = data?.type || 'text';
+  const clientMessageId = data?.clientMessageId;
+  const content = typeof data?.content === 'string' ? data.content.trim() : '';
+
+  if (!Number.isInteger(receiverId) || receiverId <= 0) {
+    throw new Error('接收者无效');
+  }
+  if (!['text', 'image'].includes(type)) {
+    throw new Error('消息类型无效');
+  }
+  if (!CLIENT_MESSAGE_ID_PATTERN.test(clientMessageId || '')) {
+    throw new Error('客户端消息 ID 无效');
+  }
+  if (!content || content.length > MAX_TEXT_LENGTH) {
+    throw new Error(`消息内容必须在 1-${MAX_TEXT_LENGTH} 个字符之间`);
+  }
+  if (type === 'image' && !/^\/uploads\/[A-Za-z0-9_-]+\.(jpe?g|png|gif|webp|bmp)$/.test(content)) {
+    throw new Error('图片地址无效');
+  }
+
+  return {
+    receiverId,
+    type,
+    content,
+    fileUrl: type === 'image' ? content : null,
+    clientMessageId
+  };
+}
+
+function toSocketMessage(row) {
+  return {
+    id: row.id,
+    from: row.sender_id,
+    to: row.receiver_id,
+    content: row.content,
+    type: row.type,
+    fileUrl: row.file_url,
+    clientMessageId: row.client_message_id,
+    read: row.read,
+    timestamp: row.created_at
+  };
+}
+
+function saveMessage(senderId, message) {
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO messages
+      (sender_id, receiver_id, content, type, file_url, client_message_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  insert.run(
+    senderId,
+    message.receiverId,
+    message.content,
+    message.type,
+    message.fileUrl,
+    message.clientMessageId
+  );
+
+  return db.prepare(`
+    SELECT id, sender_id, receiver_id, content, type, file_url,
+           client_message_id, read, created_at
+    FROM messages
+    WHERE sender_id = ? AND client_message_id = ?
+  `).get(senderId, message.clientMessageId);
+}
 
 function setupChatSocket(io) {
-  // Socket.io 认证中间件
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
@@ -14,7 +108,11 @@ function setupChatSocket(io) {
     }
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
-      socket.userId = decoded.userId;
+      const user = getActiveUser(decoded.userId);
+      if (!user) {
+        return next(new Error('账号不存在或已被禁用'));
+      }
+      socket.userId = user.id;
       next();
     } catch {
       next(new Error('登录已过期'));
@@ -23,141 +121,120 @@ function setupChatSocket(io) {
 
   io.on('connection', (socket) => {
     const userId = socket.userId;
-    console.log(`用户 ${userId} 上线`);
+    getUserSockets(userId).add(socket.id);
 
-    // 记录在线状态
-    if (!onlineUsers.has(userId)) {
-      onlineUsers.set(userId, new Set());
-    }
-    onlineUsers.get(userId).add(socket.id);
-
-    // 通知好友该用户上线
+    const onlineFriendIds = db.prepare(`
+      SELECT friend_id
+      FROM friendships
+      WHERE user_id = ?
+    `).all(userId)
+      .map(row => row.friend_id)
+      .filter(friendId => onlineUsers.has(friendId));
+    socket.emit('online_users', { userIds: onlineFriendIds });
     notifyFriendsOnlineStatus(io, userId, true);
 
-    // 处理私聊消息
     socket.on('private_message', (data) => {
       try {
-        const { to, content, type, fileUrl } = data;
-        const receiverId = parseInt(to);
-
-        if (!receiverId || !content) return;
-
-        // 验证是否互为好友
-        const friendship = db.prepare(
-          'SELECT id FROM friendships WHERE user_id = ? AND friend_id = ?'
-        ).get(userId, receiverId);
-
-        if (!friendship) return;
-
-        // 保存消息到数据库
-        const result = db.prepare(
-          'INSERT INTO messages (sender_id, receiver_id, content, type, file_url) VALUES (?, ?, ?, ?, ?)'
-        ).run(userId, receiverId, content, type || 'text', fileUrl || null);
-
-        const messageData = {
-          id: result.lastInsertRowid,
-          from: userId,
-          content,
-          type: type || 'text',
-          fileUrl: fileUrl || null,
-          timestamp: new Date().toISOString()
-        };
-
-        // 发送给接收者（如果在线）
-        const receiverSockets = onlineUsers.get(receiverId);
-        if (receiverSockets) {
-          receiverSockets.forEach(sid => {
-            io.to(sid).emit('new_message', messageData);
-          });
+        if (!requireActiveSocketUser(socket)) return;
+        const message = normalizeMessage(data);
+        if (!areFriends(userId, message.receiverId)) {
+          throw new Error('对方不是你的好友');
         }
 
-        // 回传给发送者确认
+        const existing = db.prepare(`
+          SELECT id FROM messages
+          WHERE sender_id = ? AND client_message_id = ?
+        `).get(userId, message.clientMessageId);
+        const saved = saveMessage(userId, message);
+        const messageData = toSocketMessage(saved);
+
+        if (!existing) {
+          emitToUser(io, message.receiverId, 'new_message', messageData);
+        }
         socket.emit('message_sent', messageData);
-      } catch (err) {
-        console.error('发送消息错误:', err);
-        socket.emit('message_error', { error: '消息发送失败' });
-      }
-    });
-
-    // 正在输入状态
-    socket.on('typing', (data) => {
-      const { to } = data;
-      const receiverId = parseInt(to);
-      const receiverSockets = onlineUsers.get(receiverId);
-      if (receiverSockets) {
-        receiverSockets.forEach(sid => {
-          io.to(sid).emit('typing', { from: userId });
+      } catch (error) {
+        socket.emit('message_error', {
+          clientMessageId: data?.clientMessageId,
+          error: error.message || '消息发送失败'
         });
       }
     });
 
-    // 停止输入状态
-    socket.on('stop_typing', (data) => {
-      const { to } = data;
-      const receiverId = parseInt(to);
-      const receiverSockets = onlineUsers.get(receiverId);
-      if (receiverSockets) {
-        receiverSockets.forEach(sid => {
-          io.to(sid).emit('stop_typing', { from: userId });
-        });
-      }
-    });
+    const forwardTyping = (event, data) => {
+      if (!requireActiveSocketUser(socket)) return;
+      const receiverId = Number.parseInt(data?.to, 10);
+      if (!Number.isInteger(receiverId) || !areFriends(userId, receiverId)) return;
+      emitToUser(io, receiverId, event, { from: userId });
+    };
 
-    // 标记消息已读
+    socket.on('typing', data => forwardTyping('typing', data));
+    socket.on('stop_typing', data => forwardTyping('stop_typing', data));
+
     socket.on('mark_read', (data) => {
       try {
-        const { from } = data;
-        const senderId = parseInt(from);
-        if (!senderId) return;
+        if (!requireActiveSocketUser(socket)) return;
+        const senderId = Number.parseInt(data?.from, 10);
+        if (!Number.isInteger(senderId) || !areFriends(userId, senderId)) return;
 
-        db.prepare(`
+        const result = db.prepare(`
           UPDATE messages SET read = 1
-          WHERE sender_id = ? AND receiver_id = ? AND read = 0
+          WHERE sender_id = ? AND receiver_id = ? AND read = 0 AND deleted = 0
         `).run(senderId, userId);
-      } catch (err) {
-        console.error('标记已读错误:', err);
+        socket.emit('messages_read', { from: senderId, count: result.changes });
+      } catch (error) {
+        console.error('标记已读错误:', error);
       }
     });
 
-    // 断开连接
     socket.on('disconnect', () => {
-      console.log(`用户 ${userId} socket 断开`);
       const userSockets = onlineUsers.get(userId);
-      if (userSockets) {
-        userSockets.delete(socket.id);
-        // 如果该用户所有 socket 都断开，则标记为离线
-        if (userSockets.size === 0) {
-          onlineUsers.delete(userId);
-          notifyFriendsOnlineStatus(io, userId, false);
-        }
+      if (!userSockets) return;
+      userSockets.delete(socket.id);
+      if (userSockets.size === 0) {
+        onlineUsers.delete(userId);
+        notifyFriendsOnlineStatus(io, userId, false);
       }
     });
   });
 }
 
-// 通知好友在线状态变化
 function notifyFriendsOnlineStatus(io, userId, isOnline) {
   try {
-    const friends = db.prepare(`
-      SELECT friend_id FROM friendships WHERE user_id = ?
-    `).all(userId);
-
+    const friends = db.prepare(
+      'SELECT friend_id FROM friendships WHERE user_id = ?'
+    ).all(userId);
     friends.forEach(friend => {
-      const friendSockets = onlineUsers.get(friend.friend_id);
-      if (friendSockets) {
-        friendSockets.forEach(sid => {
-          io.to(sid).emit(isOnline ? 'friend_online' : 'friend_offline', { userId });
-        });
-      }
+      emitToUser(
+        io,
+        friend.friend_id,
+        isOnline ? 'friend_online' : 'friend_offline',
+        { userId }
+      );
     });
-  } catch (err) {
-    console.error('通知在线状态错误:', err);
+  } catch (error) {
+    console.error('通知在线状态错误:', error);
   }
 }
 
-// 检查用户是否在线
-function isUserOnline(userId) {
-  return onlineUsers.has(userId) && onlineUsers.get(userId).size > 0;
+function disconnectUser(io, userId, reason = '账号状态已变更，请重新登录') {
+  const socketIds = [...(onlineUsers.get(Number(userId)) || [])];
+  socketIds.forEach(socketId => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.emit('session_revoked', { error: reason });
+      socket.disconnect(true);
+    }
+  });
+  return socketIds.length;
 }
 
-module.exports = { setupChatSocket, isUserOnline };
+function isUserOnline(userId) {
+  return Boolean(onlineUsers.get(Number(userId))?.size);
+}
+
+module.exports = {
+  setupChatSocket,
+  disconnectUser,
+  isUserOnline,
+  normalizeMessage
+};

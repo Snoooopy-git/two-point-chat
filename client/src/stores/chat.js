@@ -7,28 +7,29 @@ import { showBrowserNotification } from '../utils/notifications.js';
 export const useChatStore = defineStore('chat', () => {
   const contacts = ref([]);
   const activeContactId = ref(null);
-  const messages = ref({});        // { [contactId]: [message, ...] }
+  const messages = ref({});
+  const historyCursors = ref({});
   const loading = ref(false);
   const searchResults = ref([]);
-  const typingUsers = ref({});     // { [userId]: true }
-  const unreadCounts = ref({});    // { [contactId]: count }
+  const typingUsers = ref({});
+  const unreadCounts = ref({});
 
-  // 全局监听器初始化标志
-  let _listenersInitialized = false;
+  let boundSocket = null;
+  let boundHandlers = {};
+  let onlineSnapshot = new Set();
 
   const activeContact = computed(() =>
-    contacts.value.find(c => c.id === activeContactId.value)
+    contacts.value.find(contact => contact.id === activeContactId.value)
   );
-
   const activeMessages = computed(() =>
     messages.value[activeContactId.value] || []
   );
-
-  // 总未读数
-  const totalUnread = computed(() =>
-    Object.values(unreadCounts.value).reduce((sum, c) => sum + c, 0)
+  const activeHistoryCursor = computed(() =>
+    historyCursors.value[activeContactId.value] || null
   );
-
+  const totalUnread = computed(() =>
+    Object.values(unreadCounts.value).reduce((sum, count) => sum + count, 0)
+  );
   const sortedContacts = computed(() =>
     [...contacts.value].sort((a, b) => {
       const timeA = a.lastMessage ? new Date(a.lastMessage.created_at).getTime() : 0;
@@ -37,73 +38,95 @@ export const useChatStore = defineStore('chat', () => {
     })
   );
 
-  // ============= 全局 Socket 监听器（只初始化一次） =============
-
-  function initSocketListeners() {
-    if (_listenersInitialized) return;
-    const socket = getSocket();
-    if (!socket) {
-      // socket 还没连接好，延迟重试
-      setTimeout(() => initSocketListeners(), 500);
-      return;
-    }
-
-    socket.on('new_message', (msg) => {
-      receiveMessage(msg);
+  function detachSocketListeners() {
+    if (!boundSocket) return;
+    Object.entries(boundHandlers).forEach(([event, handler]) => {
+      boundSocket.off(event, handler);
     });
-
-    socket.on('message_sent', (msg) => {
-      confirmMessage(msg);
-    });
-
-    socket.on('friend_online', (data) => {
-      setUserOnline(data.userId);
-    });
-
-    socket.on('friend_offline', (data) => {
-      setUserOffline(data.userId);
-    });
-
-    socket.on('message_error', (data) => {
-      console.error('消息发送失败:', data.error);
-    });
-
-    _listenersInitialized = true;
-    console.log('✅ 全局 Socket 监听器已初始化');
+    boundSocket = null;
+    boundHandlers = {};
   }
 
-  // ============= 联系人 =============
+  function initSocketListeners(socket = getSocket()) {
+    if (!socket || socket === boundSocket) return;
+    detachSocketListeners();
+    boundSocket = socket;
 
-  // 获取好友列表
+    boundHandlers = {
+      new_message: receiveMessage,
+      message_sent: confirmMessage,
+      message_error: failMessage,
+      online_users: handleOnlineSnapshot,
+      friend_online: handleFriendOnline,
+      friend_offline: handleFriendOffline,
+      disconnect: handleSocketDisconnect
+    };
+    Object.entries(boundHandlers).forEach(([event, handler]) => {
+      socket.on(event, handler);
+    });
+  }
+
+  function handleOnlineSnapshot({ userIds = [] }) {
+    onlineSnapshot = new Set(userIds);
+    contacts.value.forEach(contact => {
+      contact.online = onlineSnapshot.has(contact.id);
+    });
+  }
+
+  function handleFriendOnline({ userId }) {
+    setUserOnline(userId);
+  }
+
+  function handleFriendOffline({ userId }) {
+    setUserOffline(userId);
+  }
+
+  function handleSocketDisconnect() {
+    Object.values(messages.value).forEach(contactMessages => {
+      contactMessages.filter(message => message._temp).forEach(message => {
+        message._temp = false;
+        message._error = true;
+        message._errorMessage = '连接已中断，请重试';
+      });
+    });
+  }
+
+  function resetState() {
+    detachSocketListeners();
+    contacts.value = [];
+    activeContactId.value = null;
+    messages.value = {};
+    historyCursors.value = {};
+    searchResults.value = [];
+    typingUsers.value = {};
+    unreadCounts.value = {};
+    onlineSnapshot = new Set();
+  }
+
   async function fetchContacts() {
     try {
       const data = await api.get('/api/users/friends');
-      contacts.value = data.friends.map(f => ({
-        ...f,
-        online: false
+      contacts.value = data.friends.map(friend => ({
+        ...friend,
+        online: onlineSnapshot.has(friend.id)
       }));
-      // 拉取未读数
       await fetchUnreadCounts();
-    } catch (err) {
-      console.error('获取好友列表失败:', err);
+    } catch (error) {
+      console.error('获取好友列表失败:', error);
     }
   }
 
-  // 获取未读消息数
   async function fetchUnreadCounts() {
     try {
       const data = await api.get('/api/messages/unread/counts');
-      const counts = {};
-      (data.counts || []).forEach(c => {
-        counts[c.sender_id] = c.count;
-      });
-      unreadCounts.value = counts;
-    } catch (err) {
-      console.error('获取未读数失败:', err);
+      unreadCounts.value = Object.fromEntries(
+        (data.counts || []).map(item => [item.sender_id, item.count])
+      );
+    } catch (error) {
+      console.error('获取未读数失败:', error);
     }
   }
 
-  // 搜索用户
   async function searchUsers(query) {
     if (!query.trim()) {
       searchResults.value = [];
@@ -112,201 +135,215 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const data = await api.get(`/api/users/search?q=${encodeURIComponent(query)}`);
       searchResults.value = data.users;
-    } catch (err) {
-      console.error('搜索用户失败:', err);
+    } catch (error) {
+      console.error('搜索用户失败:', error);
     }
   }
 
-  // 添加好友
   async function addFriend(friendId) {
     try {
       const data = await api.post('/api/users/friends', { friendId });
       await fetchContacts();
       return data;
-    } catch (err) {
-      throw new Error(err.message || '添加好友失败', { cause: err });
+    } catch (error) {
+      throw new Error(error.message || '添加好友失败', { cause: error });
     }
   }
 
-  // ============= 消息 =============
-
-  // 获取历史消息
-  async function fetchMessages(contactId) {
+  async function fetchMessages(contactId, before = null) {
     try {
-      const data = await api.get(`/api/messages/${contactId}`);
-      messages.value[contactId] = data.messages;
-    } catch (err) {
-      console.error('获取消息失败:', err);
+      const query = before ? `?before=${encodeURIComponent(before)}` : '';
+      const data = await api.get(`/api/messages/${contactId}${query}`);
+      messages.value[contactId] = before
+        ? [...data.messages, ...(messages.value[contactId] || [])]
+        : data.messages;
+      historyCursors.value[contactId] = data.nextCursor;
+    } catch (error) {
+      console.error('获取消息失败:', error);
     }
   }
 
-  // 打开聊天
+  async function loadOlderMessages() {
+    const cursor = activeHistoryCursor.value;
+    if (!activeContactId.value || !cursor) return;
+    await fetchMessages(activeContactId.value, cursor);
+  }
+
   async function openChat(contactId) {
     activeContactId.value = contactId;
     if (!messages.value[contactId]) {
       await fetchMessages(contactId);
     }
-    // 标记该联系人的消息为已读
-    markAsRead(contactId);
+    await markAsRead(contactId);
   }
 
-  // 标记消息已读
-  function markAsRead(contactId) {
-    // 清除本地未读计数
-    unreadCounts.value[contactId] = 0;
-
-    // 通过 HTTP API 标记已读
-    api.put(`/api/messages/${contactId}/read`).catch(err => {
-      console.error('标记已读失败:', err);
-    });
-
-    // 通过 Socket 通知对方（如果在线）
-    const socket = getSocket();
-    if (socket) {
-      socket.emit('mark_read', { from: contactId });
+  async function markAsRead(contactId) {
+    try {
+      await api.put(`/api/messages/${contactId}/read`);
+      unreadCounts.value[contactId] = 0;
+      (messages.value[contactId] || [])
+        .filter(message => message.sender_id === contactId)
+        .forEach(message => {
+          message.read = 1;
+        });
+    } catch (error) {
+      console.error('标记已读失败:', error);
     }
   }
 
-  // 发送文字消息
-  function sendTextMessage(content) {
-    const socket = getSocket();
-    if (!socket || !activeContactId.value) return;
-
-    const messageData = {
-      to: activeContactId.value,
-      content,
-      type: 'text'
-    };
-
-    // 乐观更新：立即添加到本地消息列表
-    const tempMsg = {
-      id: Date.now(),
-      sender_id: 'self',
-      receiver_id: activeContactId.value,
-      content,
-      type: 'text',
-      file_url: null,
-      read: 1,
-      created_at: new Date().toISOString(),
-      _temp: true
-    };
-
-    if (!messages.value[activeContactId.value]) {
-      messages.value[activeContactId.value] = [];
-    }
-    messages.value[activeContactId.value].push(tempMsg);
-
-    socket.emit('private_message', messageData);
+  function createClientMessageId() {
+    return globalThis.crypto?.randomUUID?.()
+      || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
   }
 
-  // 发送图片消息
-  function sendImageMessage(fileUrl) {
+  function sendMessage(content, type, fileUrl = null) {
     const socket = getSocket();
-    if (!socket || !activeContactId.value) return;
+    const contactId = activeContactId.value;
+    if (!socket?.connected || !contactId) return false;
 
-    const messageData = {
-      to: activeContactId.value,
-      content: fileUrl,
-      type: 'image',
-      fileUrl
-    };
-
-    // 乐观更新
-    const tempMsg = {
-      id: Date.now(),
+    const clientMessageId = createClientMessageId();
+    const tempMessage = {
+      id: clientMessageId,
+      client_message_id: clientMessageId,
       sender_id: 'self',
-      receiver_id: activeContactId.value,
-      content: fileUrl,
-      type: 'image',
+      receiver_id: contactId,
+      content,
+      type,
       file_url: fileUrl,
       read: 1,
       created_at: new Date().toISOString(),
-      _temp: true
+      _temp: true,
+      _error: false
     };
-
-    if (!messages.value[activeContactId.value]) {
-      messages.value[activeContactId.value] = [];
-    }
-    messages.value[activeContactId.value].push(tempMsg);
-
-    socket.emit('private_message', messageData);
-  }
-
-  // 接收消息（由全局 socket 事件触发）
-  function receiveMessage(msg) {
-    const contactId = msg.from;
-    if (!messages.value[contactId]) {
-      messages.value[contactId] = [];
-    }
-    messages.value[contactId].push({
-      id: msg.id,
-      sender_id: msg.from,
-      receiver_id: 'self',
-      content: msg.content,
-      type: msg.type || 'text',
-      file_url: msg.fileUrl || null,
-      read: 0,
-      created_at: msg.timestamp || new Date().toISOString()
+    messages.value[contactId] ||= [];
+    messages.value[contactId].push(tempMessage);
+    socket.emit('private_message', {
+      to: contactId,
+      content,
+      type,
+      fileUrl,
+      clientMessageId
     });
+    return true;
+  }
 
-    // 更新好友列表中的最后一条消息
-    const contact = contacts.value.find(c => c.id === contactId);
-    const contactName = contact?.username || '新消息';
-    if (contact) {
-      contact.lastMessage = {
-        content: msg.type === 'image' ? '[图片]' : msg.content,
-        type: msg.type || 'text',
-        created_at: msg.timestamp || new Date().toISOString()
-      };
+  function sendTextMessage(content) {
+    return sendMessage(content, 'text');
+  }
+
+  function sendImageMessage(fileUrl) {
+    return sendMessage(fileUrl, 'image', fileUrl);
+  }
+
+  function receiveMessage(message) {
+    const contactId = message.from;
+    messages.value[contactId] ||= [];
+    if (!messages.value[contactId].some(item => item.id === message.id)) {
+      messages.value[contactId].push({
+        id: message.id,
+        client_message_id: message.clientMessageId,
+        sender_id: message.from,
+        receiver_id: message.to,
+        content: message.content,
+        type: message.type || 'text',
+        file_url: message.fileUrl || null,
+        read: 0,
+        created_at: message.timestamp
+      });
     }
 
-    // 如果不是正在查看该联系人，增加未读计数
-    if (activeContactId.value !== contactId) {
-      if (!unreadCounts.value[contactId]) {
-        unreadCounts.value[contactId] = 0;
-      }
-      unreadCounts.value[contactId]++;
+    updateLastMessage(contactId, message);
+    if (activeContactId.value === contactId) {
+      markAsRead(contactId);
+      return;
+    }
 
-      // 发送浏览器桌面通知
-      showBrowserNotification(
-        contactName,
-        msg.type === 'image' ? '📷 发送了一张图片' : msg.content
+    unreadCounts.value[contactId] = (unreadCounts.value[contactId] || 0) + 1;
+    const contactName = contacts.value.find(contact => contact.id === contactId)?.username || '新消息';
+    showBrowserNotification(
+      contactName,
+      message.type === 'image' ? '📷 发送了一张图片' : message.content
+    );
+  }
+
+  function confirmMessage(message) {
+    const contactMessages = messages.value[message.to];
+    if (!contactMessages) return;
+    const index = contactMessages.findIndex(
+      item => item.client_message_id === message.clientMessageId
+    );
+    if (index === -1) return;
+    contactMessages[index] = {
+      ...contactMessages[index],
+      id: message.id,
+      sender_id: message.from,
+      receiver_id: message.to,
+      read: message.read,
+      created_at: message.timestamp,
+      _temp: false,
+      _error: false
+    };
+    updateLastMessage(message.to, message);
+  }
+
+  function failMessage({ clientMessageId, error }) {
+    Object.values(messages.value).forEach(contactMessages => {
+      const message = contactMessages.find(
+        item => item.client_message_id === clientMessageId
       );
-    }
+      if (message) {
+        message._temp = false;
+        message._error = true;
+        message._errorMessage = error;
+      }
+    });
   }
 
-  // 消息发送确认（由 socket 事件触发）
-  function confirmMessage(msg) {
-    // 将临时消息替换为服务器确认的消息
-    const contactMsgs = messages.value[msg.to] || messages.value[msg.receiver_id];
-    if (!contactMsgs) return;
-    const tempIdx = contactMsgs.findIndex(m => m._temp && m.content === msg.content);
-    if (tempIdx !== -1) {
-      contactMsgs[tempIdx] = {
-        ...contactMsgs[tempIdx],
-        id: msg.id,
-        _temp: false
-      };
+  function retryMessage(clientMessageId) {
+    const socket = getSocket();
+    if (!socket?.connected) return false;
+
+    for (const contactMessages of Object.values(messages.value)) {
+      const message = contactMessages.find(
+        item => item.client_message_id === clientMessageId
+      );
+      if (!message) continue;
+      message._temp = true;
+      message._error = false;
+      delete message._errorMessage;
+      socket.emit('private_message', {
+        to: message.receiver_id,
+        content: message.content,
+        type: message.type,
+        fileUrl: message.file_url,
+        clientMessageId
+      });
+      return true;
     }
+    return false;
   }
 
-  // ============= 在线状态 =============
+  function updateLastMessage(contactId, message) {
+    const contact = contacts.value.find(item => item.id === contactId);
+    if (!contact) return;
+    contact.lastMessage = {
+      content: message.content,
+      type: message.type || 'text',
+      created_at: message.timestamp
+    };
+  }
 
   function setUserOnline(userId) {
-    const contact = contacts.value.find(c => c.id === userId);
-    if (contact) {
-      contact.online = true;
-    }
+    onlineSnapshot.add(userId);
+    const contact = contacts.value.find(item => item.id === userId);
+    if (contact) contact.online = true;
   }
 
   function setUserOffline(userId) {
-    const contact = contacts.value.find(c => c.id === userId);
-    if (contact) {
-      contact.online = false;
-    }
+    onlineSnapshot.delete(userId);
+    const contact = contacts.value.find(item => item.id === userId);
+    if (contact) contact.online = false;
   }
-
-  // ============= 输入状态 =============
 
   function setTyping(userId) {
     typingUsers.value[userId] = true;
@@ -323,6 +360,7 @@ export const useChatStore = defineStore('chat', () => {
     contacts,
     activeContactId,
     messages,
+    historyCursors,
     loading,
     searchResults,
     typingUsers,
@@ -330,19 +368,23 @@ export const useChatStore = defineStore('chat', () => {
     totalUnread,
     activeContact,
     activeMessages,
+    activeHistoryCursor,
     sortedContacts,
     initSocketListeners,
+    resetState,
     fetchContacts,
     fetchUnreadCounts,
     searchUsers,
     addFriend,
     fetchMessages,
+    loadOlderMessages,
     openChat,
     markAsRead,
     sendTextMessage,
     sendImageMessage,
     receiveMessage,
     confirmMessage,
+    retryMessage,
     setUserOnline,
     setUserOffline,
     setTyping,

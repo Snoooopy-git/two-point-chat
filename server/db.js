@@ -39,6 +39,7 @@ db.exec(`
     content TEXT NOT NULL,
     type TEXT DEFAULT 'text',
     file_url TEXT DEFAULT NULL,
+    client_message_id TEXT DEFAULT NULL,
     read INTEGER DEFAULT 0,
     deleted INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -59,6 +60,7 @@ const migrate = db.transaction(() => {
   ensureColumn('users', 'role', "TEXT DEFAULT 'user'");
   ensureColumn('users', 'status', "TEXT DEFAULT 'active'");
   ensureColumn('messages', 'deleted', 'INTEGER DEFAULT 0');
+  ensureColumn('messages', 'client_message_id', 'TEXT DEFAULT NULL');
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_friendships_user_friend
@@ -67,6 +69,9 @@ const migrate = db.transaction(() => {
       ON messages(sender_id, receiver_id, created_at, id);
     CREATE INDEX IF NOT EXISTS idx_messages_unread
       ON messages(receiver_id, read, deleted, sender_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_sender_client_id
+      ON messages(sender_id, client_message_id)
+      WHERE client_message_id IS NOT NULL;
   `);
 });
 

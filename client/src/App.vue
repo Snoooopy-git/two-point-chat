@@ -10,9 +10,6 @@ import { requestNotificationPermission } from './utils/notifications.js';
 const chatStore = useChatStore();
 
 onMounted(() => {
-  // 初始化全局 socket 监听器（只执行一次）
-  chatStore.initSocketListeners();
-
   // 请求浏览器通知权限
   requestNotificationPermission();
 });

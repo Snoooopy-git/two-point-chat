@@ -80,16 +80,15 @@ router.post('/login', (req, res) => {
 
 // 获取当前用户信息
 router.get('/me', authMiddleware, (req, res) => {
-  try {
-    const user = db.prepare('SELECT id, username, avatar, role, created_at FROM users WHERE id = ?').get(req.userId);
-    if (!user) {
-      return res.status(404).json({ error: '用户不存在' });
+  res.json({
+    user: {
+      id: req.user.id,
+      username: req.user.username,
+      avatar: req.user.avatar,
+      role: req.user.role,
+      created_at: req.user.created_at
     }
-    res.json({ user });
-  } catch (err) {
-    console.error('获取用户信息错误:', err);
-    res.status(500).json({ error: '服务器错误' });
-  }
+  });
 });
 
 module.exports = router;
