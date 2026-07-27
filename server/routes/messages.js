@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { toUtcIsoTimestamp } = require('../utils/timestamps');
 
 const router = express.Router();
 
@@ -38,7 +39,10 @@ router.get('/:friendId', authMiddleware, (req, res) => {
     `).all(req.userId, friendId, friendId, req.userId, before, before);
 
     const hasMore = rows.length > 200;
-    const messages = rows.slice(0, 200).reverse();
+    const messages = rows.slice(0, 200).reverse().map(message => ({
+      ...message,
+      created_at: toUtcIsoTimestamp(message.created_at)
+    }));
     const nextCursor = hasMore ? messages[0].id : null;
 
     res.json({ messages, nextCursor });

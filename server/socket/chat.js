@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { JWT_SECRET, getActiveUser } = require('../middleware/auth');
+const { toUtcIsoTimestamp } = require('../utils/timestamps');
 
 const onlineUsers = new Map();
 const MAX_TEXT_LENGTH = 5000;
@@ -73,7 +74,7 @@ function toSocketMessage(row) {
     fileUrl: row.file_url,
     clientMessageId: row.client_message_id,
     read: row.read,
-    timestamp: row.created_at
+    timestamp: toUtcIsoTimestamp(row.created_at)
   };
 }
 

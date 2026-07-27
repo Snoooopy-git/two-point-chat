@@ -202,6 +202,7 @@ test('history returns the newest page and uses a stable cursor', async () => {
   assert.equal(latest.body.messages[0].id, ids[5]);
   assert.equal(latest.body.messages.at(-1).id, ids[204]);
   assert.equal(latest.body.nextCursor, ids[5]);
+  assert.match(latest.body.messages[0].created_at, /^\d{4}-\d{2}-\d{2}T.*Z$/);
 
   const older = await request(
     `/api/messages/${second.user.id}?before=${latest.body.nextCursor}`,
@@ -311,6 +312,7 @@ test('Socket snapshot and client message ID make delivery reconnect-safe', async
   const secondMessage = await secondConfirmation;
 
   assert.equal(firstMessage.id, secondMessage.id);
+  assert.match(firstMessage.timestamp, /^\d{4}-\d{2}-\d{2}T.*Z$/);
   await new Promise(resolve => setTimeout(resolve, 100));
   assert.equal(deliveries, 1);
   const count = db.prepare(`
