@@ -73,8 +73,10 @@ for (const marker of [
   'npm ci --prefix client --include=dev',
   'npm rebuild better-sqlite3',
   'npm run check',
-  'npm prune --omit=dev',
-  'npm prune --omit=dev --prefix client',
+  'npm prune --omit=dev --package-lock=false',
+  'npm prune --omit=dev --prefix client --package-lock=false',
+  'LOCKFILE_FINGERPRINT_BEFORE',
+  'LOCKFILE_FINGERPRINT_AFTER',
   '/api/health'
 ]) {
   if (!deployScript.includes(marker)) {

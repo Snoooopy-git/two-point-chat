@@ -40,6 +40,7 @@ require_command realpath
 require_command grep
 require_command mkdir
 require_command dirname
+require_command sha256sum
 
 : "${DEPLOY_VERSION:?必须设置 DEPLOY_VERSION，例如 0.2.0}"
 : "${JWT_SECRET:?必须通过运行环境设置 JWT_SECRET}"
@@ -65,6 +66,7 @@ export JWT_SECRET
 export CHAT_DB_PATH
 
 mkdir -p "$(dirname "$CHAT_DB_PATH")" "$BACKUP_DIR"
+LOCKFILE_FINGERPRINT_BEFORE="$(sha256sum -- package-lock.json client/package-lock.json)"
 
 echo "[1/7] 部署前数据库备份"
 if [[ -f "$CHAT_DB_PATH" ]]; then
@@ -84,8 +86,14 @@ echo "[4/7] 执行完整质量门禁"
 npm run check
 
 echo "[5/7] 移除生产不需要的开发依赖"
-npm prune --omit=dev
-npm prune --omit=dev --prefix client
+npm prune --omit=dev --package-lock=false
+npm prune --omit=dev --prefix client --package-lock=false
+
+LOCKFILE_FINGERPRINT_AFTER="$(sha256sum -- package-lock.json client/package-lock.json)"
+if [[ "$LOCKFILE_FINGERPRINT_AFTER" != "$LOCKFILE_FINGERPRINT_BEFORE" ]]; then
+  echo "依赖安装或裁剪修改了 lockfile，拒绝更新 PM2 进程。" >&2
+  exit 1
+fi
 
 echo "[6/7] 更新单实例 PM2 进程"
 pm2 startOrReload ecosystem.config.js --update-env
