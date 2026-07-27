@@ -69,8 +69,12 @@ const deployScript = read('deploy.sh');
 for (const marker of [
   'set -Eeuo pipefail',
   'db:backup',
+  'npm ci --include=dev',
+  'npm ci --prefix client --include=dev',
   'npm rebuild better-sqlite3',
   'npm run check',
+  'npm prune --omit=dev',
+  'npm prune --omit=dev --prefix client',
   '/api/health'
 ]) {
   if (!deployScript.includes(marker)) {

@@ -125,7 +125,7 @@
       </section>
 
       <footer class="sidebar-footer">
-        <span>two-point 0.3.1</span>
+        <span>two-point 0.3.2</span>
         <span>两点之间，保持连接</span>
       </footer>
     </aside>

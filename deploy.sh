@@ -74,8 +74,8 @@ else
 fi
 
 echo "[2/7] 使用 lockfile 安装依赖"
-npm ci
-npm ci --prefix client
+npm ci --include=dev
+npm ci --prefix client --include=dev
 
 echo "[3/7] 在目标环境重建原生依赖"
 npm rebuild better-sqlite3
