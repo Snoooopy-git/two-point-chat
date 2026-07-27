@@ -18,5 +18,4 @@ backups/
 .claude/
 client/src/assets/hero.png
 client/src/assets/vite.svg
-client/public/favicon.svg
 client/public/icons.svg

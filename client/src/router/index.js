@@ -3,10 +3,6 @@ import { useAuthStore } from '../stores/auth.js';
 
 const routes = [
   {
-    path: '/',
-    redirect: '/contacts'
-  },
-  {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue'),
@@ -19,16 +15,25 @@ const routes = [
     meta: { guest: true }
   },
   {
-    path: '/contacts',
-    name: 'Contacts',
+    path: '/',
     component: () => import('../views/Contacts.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/chat/:userId',
-    name: 'Chat',
-    component: () => import('../views/Chat.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        redirect: '/contacts'
+      },
+      {
+        path: 'contacts',
+        name: 'Contacts',
+        component: () => import('../views/WorkspaceHome.vue')
+      },
+      {
+        path: 'chat/:userId',
+        name: 'Chat',
+        component: () => import('../views/Chat.vue')
+      }
+    ]
   },
   {
     path: '/admin',

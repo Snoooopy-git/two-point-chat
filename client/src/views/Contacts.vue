@@ -1,92 +1,162 @@
 <template>
-  <div class="contacts-page">
-    <!-- 顶部导航 -->
-    <header class="app-header">
-      <h2>🎯 双点聊天</h2>
-      <div class="header-right">
-        <span class="user-name">{{ authStore.user?.username }}</span>
-        <button class="btn-logout" @click="handleLogout">退出</button>
-      </div>
-    </header>
+  <main class="workspace-shell" :class="{ 'conversation-open': route.name === 'Chat' }">
+    <aside class="workspace-sidebar">
+      <header class="sidebar-header">
+        <BrandLogo />
+        <ThemeToggle />
+      </header>
 
-    <!-- 添加好友区域 -->
-    <div class="add-friend-section">
-      <form @submit.prevent="handleSearch" class="search-form">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜索用户添加好友..."
-          class="search-input"
-          @input="handleSearchInput"
-        />
-        <button type="submit" class="btn-search">搜索</button>
-      </form>
-
-      <!-- 搜索结果 -->
-      <div v-if="chatStore.searchResults.length > 0" class="search-results">
-        <div
-          v-for="user in chatStore.searchResults"
-          :key="user.id"
-          class="search-item"
-        >
-          <span>{{ user.username }}</span>
-          <button class="btn-add" @click="handleAddFriend(user.id)">添加好友</button>
+      <div class="sidebar-account">
+        <div class="user-avatar">
+          {{ userAvatar }}
+          <i class="user-online-dot"></i>
+        </div>
+        <div class="account-copy">
+          <strong>{{ authStore.user?.username }}</strong>
+          <span><i class="presence-dot"></i> 我的账号 · 在线</span>
+        </div>
+        <div class="account-actions">
+          <button
+            v-if="authStore.isAdmin"
+            type="button"
+            class="icon-button"
+            title="后台管理"
+            aria-label="后台管理"
+            @click="router.push('/admin')"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20.3h-3v-.08a1.7 1.7 0 0 0-1.03-1.56A1.7 1.7 0 0 0 8.8 19l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.02 15a1.7 1.7 0 0 0-1.56-1.03H5.4v-3h.06A1.7 1.7 0 0 0 7.02 9.94a1.7 1.7 0 0 0-.34-1.88L6.62 8l2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34 1.7 1.7 0 0 0 1.03-1.56V4.7h3v.02a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 8l-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03h.04v3h-.04A1.7 1.7 0 0 0 19.4 15Z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="icon-button"
+            title="退出登录"
+            aria-label="退出登录"
+            @click="handleLogout"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M10 17l5-5-5-5m5 5H3m9-9h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7" />
+            </svg>
+          </button>
         </div>
       </div>
-      <div v-if="searchQuery && searchDone && chatStore.searchResults.length === 0" class="search-empty">
-        未找到用户
-      </div>
-    </div>
 
-    <!-- 管理员入口 -->
-    <div v-if="authStore.isAdmin" class="admin-entry">
-      <button class="btn-admin" @click="$router.push('/admin')">⚙️ 后台管理</button>
-    </div>
+      <section class="contact-search">
+        <form class="search-form" @submit.prevent="handleSearch">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="m16 16 4 4" />
+          </svg>
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="搜索并添加朋友"
+            aria-label="搜索并添加朋友"
+            @input="handleSearchInput"
+          />
+          <button type="submit" :disabled="!searchQuery.trim()">搜索</button>
+        </form>
 
-    <!-- 好友列表 -->
-    <div class="contacts-section">
-      <h3 class="section-title">我的好友 ({{ chatStore.contacts.length }})</h3>
-      <div v-if="chatStore.contacts.length === 0" class="empty-list">
-        <p>还没有好友，搜索并添加吧！</p>
-      </div>
-      <div class="contact-list">
-        <div
-          v-for="contact in chatStore.sortedContacts"
-          :key="contact.id"
-          class="contact-item"
-          @click="openChat(contact.id)"
-        >
-          <div class="contact-avatar">
-            <span class="avatar-text">{{ contact.username[0].toUpperCase() }}</span>
-            <span v-if="contact.online" class="online-dot"></span>
-          </div>
-          <div class="contact-info">
-            <div class="contact-name">{{ contact.username }}</div>
-            <div class="contact-last-msg" v-if="contact.lastMessage">
-              {{ contact.lastMessage.type === 'image' ? '📷 图片' : contact.lastMessage.content }}
-            </div>
-          </div>
-          <div v-if="chatStore.unreadCounts[contact.id]" class="unread-badge">
-            {{ chatStore.unreadCounts[contact.id] > 99 ? '99+' : chatStore.unreadCounts[contact.id] }}
+        <div v-if="showSearchPanel" class="search-panel">
+          <div class="search-panel-label">搜索结果</div>
+          <button
+            v-for="user in chatStore.searchResults"
+            :key="user.id"
+            type="button"
+            class="search-result"
+            @click="handleAddFriend(user.id)"
+          >
+            <span class="mini-avatar">{{ user.username[0].toUpperCase() }}</span>
+            <span>{{ user.username }}</span>
+            <strong>添加</strong>
+          </button>
+          <div v-if="searchDone && chatStore.searchResults.length === 0" class="search-empty">
+            没有找到匹配的用户
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+      </section>
+
+      <section class="contacts-section">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">CONVERSATIONS</span>
+            <h2>消息</h2>
+          </div>
+          <span class="contact-count">{{ chatStore.contacts.length }}</span>
+        </div>
+
+        <div v-if="chatStore.contacts.length === 0" class="sidebar-empty">
+          <div class="empty-symbol">＋</div>
+          <strong>还没有朋友</strong>
+          <span>在上方搜索用户名，开始第一段对话。</span>
+        </div>
+
+        <nav v-else class="contact-list" aria-label="会话列表">
+          <button
+            v-for="contact in chatStore.sortedContacts"
+            :key="contact.id"
+            type="button"
+            class="contact-item"
+            :class="{ active: chatStore.activeContactId === contact.id }"
+            @click="openChat(contact.id)"
+          >
+            <span class="contact-avatar">
+              {{ contact.username[0].toUpperCase() }}
+              <i v-if="contact.online" class="online-dot"></i>
+            </span>
+            <span class="contact-info">
+              <span class="contact-row">
+                <strong>{{ contact.username }}</strong>
+                <time v-if="contact.lastMessage">{{ formatContactTime(contact.lastMessage.created_at) }}</time>
+              </span>
+              <span class="contact-row">
+                <span class="contact-last-message">
+                  {{ contact.lastMessage ? formatPreview(contact.lastMessage) : '还没有消息' }}
+                </span>
+                <span v-if="chatStore.unreadCounts[contact.id]" class="unread-badge">
+                  {{ chatStore.unreadCounts[contact.id] > 99 ? '99+' : chatStore.unreadCounts[contact.id] }}
+                </span>
+              </span>
+            </span>
+          </button>
+        </nav>
+      </section>
+
+      <footer class="sidebar-footer">
+        <span>two-point 0.3.1</span>
+        <span>两点之间，保持连接</span>
+      </footer>
+    </aside>
+
+    <section class="workspace-content">
+      <router-view />
+    </section>
+  </main>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useChatStore } from '../stores/chat.js';
+import { useUiStore } from '../stores/ui.js';
+import BrandLogo from '../components/BrandLogo.vue';
+import ThemeToggle from '../components/ThemeToggle.vue';
 
+const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const chatStore = useChatStore();
+const uiStore = useUiStore();
 
 const searchQuery = ref('');
 const searchDone = ref(false);
+const showSearchPanel = computed(() =>
+  Boolean(searchQuery.value.trim()) && (searchDone.value || chatStore.searchResults.length > 0)
+);
+const userAvatar = computed(() => (authStore.user?.username || 'U')[0].toUpperCase());
 
 let searchTimer = null;
 
@@ -94,34 +164,39 @@ onMounted(async () => {
   await chatStore.fetchContacts();
 });
 
+onBeforeUnmount(() => {
+  clearTimeout(searchTimer);
+});
+
 function handleSearchInput() {
   clearTimeout(searchTimer);
   searchDone.value = false;
-  searchTimer = setTimeout(() => {
-    if (searchQuery.value.trim()) {
-      chatStore.searchUsers(searchQuery.value.trim());
-      searchDone.value = true;
-    }
+  if (!searchQuery.value.trim()) {
+    chatStore.searchResults = [];
+    return;
+  }
+  searchTimer = setTimeout(async () => {
+    await chatStore.searchUsers(searchQuery.value.trim());
+    searchDone.value = true;
   }, 300);
 }
 
-function handleSearch(e) {
-  e.preventDefault();
-  if (searchQuery.value.trim()) {
-    chatStore.searchUsers(searchQuery.value.trim());
-    searchDone.value = true;
-  }
+async function handleSearch() {
+  if (!searchQuery.value.trim()) return;
+  clearTimeout(searchTimer);
+  await chatStore.searchUsers(searchQuery.value.trim());
+  searchDone.value = true;
 }
 
 async function handleAddFriend(userId) {
   try {
     await chatStore.addFriend(userId);
-    alert('添加好友成功！');
+    uiStore.notify('好友已添加，可以开始聊天了', 'success');
     searchQuery.value = '';
     chatStore.searchResults = [];
     searchDone.value = false;
-  } catch (err) {
-    alert(err.message);
+  } catch (error) {
+    uiStore.notify(error.message, 'error');
   }
 }
 
@@ -133,236 +208,18 @@ function handleLogout() {
   authStore.logout();
   router.push('/login');
 }
+
+function formatPreview(message) {
+  return message.type === 'image' ? '发送了一张图片' : message.content;
+}
+
+function formatContactTime(timestamp) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
 </script>
-
-<style scoped>
-.contacts-page {
-  max-width: 600px;
-  margin: 0 auto;
-  min-height: 100vh;
-  background: #f5f5f5;
-}
-
-.app-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  padding: 16px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.app-header h2 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.user-name {
-  font-size: 14px;
-  opacity: 0.9;
-}
-
-.btn-logout {
-  background: rgba(255,255,255,0.2);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.3);
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.add-friend-section {
-  padding: 16px 20px;
-  background: #fff;
-  border-bottom: 1px solid #eee;
-}
-
-.search-form {
-  display: flex;
-  gap: 8px;
-}
-
-.search-input {
-  flex: 1;
-  padding: 10px 14px;
-  border: 2px solid #e0e0e0;
-  border-radius: 10px;
-  font-size: 14px;
-  outline: none;
-}
-
-.search-input:focus {
-  border-color: #667eea;
-}
-
-.btn-search {
-  padding: 10px 20px;
-  background: #667eea;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.search-results {
-  margin-top: 12px;
-  border: 1px solid #eee;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.search-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-  background: #fafafa;
-  border-bottom: 1px solid #eee;
-}
-
-.search-item:last-child {
-  border-bottom: none;
-}
-
-.search-empty {
-  margin-top: 12px;
-  text-align: center;
-  color: #999;
-  font-size: 14px;
-}
-
-.btn-add {
-  padding: 6px 14px;
-  background: #2ecc71;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.section-title {
-  padding: 16px 20px 8px;
-  font-size: 14px;
-  color: #999;
-  margin: 0;
-}
-
-.admin-entry {
-  padding: 10px 20px;
-  background: #fff;
-  border-bottom: 1px solid #eee;
-}
-
-.btn-admin {
-  width: 100%;
-  padding: 10px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.empty-list {
-  text-align: center;
-  padding: 40px 20px;
-  color: #999;
-}
-
-.contact-list {
-  padding: 0 20px;
-}
-
-.contact-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px;
-  background: #fff;
-  border-radius: 12px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition: transform 0.1s;
-}
-
-.contact-item:hover {
-  transform: translateX(2px);
-}
-
-.contact-avatar {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.avatar-text {
-  color: #fff;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.online-dot {
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  width: 12px;
-  height: 12px;
-  background: #2ecc71;
-  border-radius: 50%;
-  border: 2px solid #fff;
-}
-
-.contact-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.contact-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-}
-
-.contact-last-msg {
-  font-size: 13px;
-  color: #999;
-  margin-top: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 未读消息徽章 */
-.unread-badge {
-  background: #ff4757;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  min-width: 20px;
-  height: 20px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 6px;
-  flex-shrink: 0;
-}
-</style>

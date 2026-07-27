@@ -1,7 +1,7 @@
 <template>
   <div v-if="visible">
     <div class="emoji-picker-overlay" @click.stop="$emit('close')"></div>
-    <div class="emoji-picker-panel">
+    <div class="emoji-picker-panel" role="dialog" aria-label="选择表情">
       <emoji-picker
         locale="zh"
         data-source="/emoji-data.json"
@@ -27,25 +27,3 @@ function onEmojiClick(e) {
   }
 }
 </script>
-
-<style scoped>
-.emoji-picker-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 100;
-}
-
-.emoji-picker-panel {
-  position: fixed;
-  bottom: 80px;
-  right: 20px;
-  z-index: 101;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-  max-height: 420px;
-}
-</style>
