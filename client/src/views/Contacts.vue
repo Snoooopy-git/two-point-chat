@@ -43,54 +43,35 @@
         </div>
       </div>
 
-      <section class="contact-search">
-        <form class="search-form" @submit.prevent="handleSearch">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="6.5" />
-            <path d="m16 16 4 4" />
-          </svg>
-          <input
-            v-model="searchQuery"
-            type="search"
-            placeholder="搜索并添加朋友"
-            aria-label="搜索并添加朋友"
-            @input="handleSearchInput"
-          />
-          <button type="submit" :disabled="!searchQuery.trim()">搜索</button>
-        </form>
-
-        <div v-if="showSearchPanel" class="search-panel">
-          <div class="search-panel-label">搜索结果</div>
-          <button
-            v-for="user in chatStore.searchResults"
-            :key="user.id"
-            type="button"
-            class="search-result"
-            @click="handleAddFriend(user.id)"
-          >
-            <span class="mini-avatar">{{ user.username[0].toUpperCase() }}</span>
-            <span>{{ user.username }}</span>
-            <strong>添加</strong>
-          </button>
-          <div v-if="searchDone && chatStore.searchResults.length === 0" class="search-empty">
-            没有找到匹配的用户
-          </div>
-        </div>
-      </section>
-
       <section class="contacts-section">
         <div class="section-heading">
           <div>
             <span class="eyebrow">CONVERSATIONS</span>
             <h2>消息</h2>
           </div>
-          <span class="contact-count">{{ chatStore.contacts.length }}</span>
+          <div class="section-heading-actions">
+            <button
+              type="button"
+              class="add-friend-button"
+              aria-label="添加好友和查看好友申请"
+              title="添加好友"
+              @click="friendDialogOpen = true"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              <span v-if="chatStore.incomingRequestCount" class="request-count-badge">
+                {{ chatStore.incomingRequestCount > 99 ? '99+' : chatStore.incomingRequestCount }}
+              </span>
+            </button>
+            <span class="contact-count">{{ chatStore.contacts.length }}</span>
+          </div>
         </div>
 
         <div v-if="chatStore.contacts.length === 0" class="sidebar-empty">
           <div class="empty-symbol">＋</div>
           <strong>还没有朋友</strong>
-          <span>在上方搜索用户名，开始第一段对话。</span>
+          <span>点击消息标题旁的加号，添加第一位朋友。</span>
         </div>
 
         <nav v-else class="contact-list" aria-label="会话列表">
@@ -125,7 +106,7 @@
       </section>
 
       <footer class="sidebar-footer">
-        <span>two-point 0.3.2</span>
+        <span>two-point {{ appVersion }}</span>
         <span>两点之间，保持连接</span>
       </footer>
     </aside>
@@ -133,72 +114,31 @@
     <section class="workspace-content">
       <router-view />
     </section>
+
+    <FriendRequestDialog v-if="friendDialogOpen" @close="friendDialogOpen = false" />
   </main>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useChatStore } from '../stores/chat.js';
-import { useUiStore } from '../stores/ui.js';
 import BrandLogo from '../components/BrandLogo.vue';
+import FriendRequestDialog from '../components/FriendRequestDialog.vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
+import { version as appVersion } from '../../package.json';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const chatStore = useChatStore();
-const uiStore = useUiStore();
-
-const searchQuery = ref('');
-const searchDone = ref(false);
-const showSearchPanel = computed(() =>
-  Boolean(searchQuery.value.trim()) && (searchDone.value || chatStore.searchResults.length > 0)
-);
+const friendDialogOpen = ref(false);
 const userAvatar = computed(() => (authStore.user?.username || 'U')[0].toUpperCase());
 
-let searchTimer = null;
-
 onMounted(async () => {
-  await chatStore.fetchContacts();
+  await Promise.all([chatStore.fetchContacts(), chatStore.fetchFriendRequests()]);
 });
-
-onBeforeUnmount(() => {
-  clearTimeout(searchTimer);
-});
-
-function handleSearchInput() {
-  clearTimeout(searchTimer);
-  searchDone.value = false;
-  if (!searchQuery.value.trim()) {
-    chatStore.searchResults = [];
-    return;
-  }
-  searchTimer = setTimeout(async () => {
-    await chatStore.searchUsers(searchQuery.value.trim());
-    searchDone.value = true;
-  }, 300);
-}
-
-async function handleSearch() {
-  if (!searchQuery.value.trim()) return;
-  clearTimeout(searchTimer);
-  await chatStore.searchUsers(searchQuery.value.trim());
-  searchDone.value = true;
-}
-
-async function handleAddFriend(userId) {
-  try {
-    await chatStore.addFriend(userId);
-    uiStore.notify('好友已添加，可以开始聊天了', 'success');
-    searchQuery.value = '';
-    chatStore.searchResults = [];
-    searchDone.value = false;
-  } catch (error) {
-    uiStore.notify(error.message, 'error');
-  }
-}
 
 function openChat(userId) {
   router.push(`/chat/${userId}`);

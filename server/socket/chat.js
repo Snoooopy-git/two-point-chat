@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { JWT_SECRET, getActiveUser } = require('../middleware/auth');
 const { toUtcIsoTimestamp } = require('../utils/timestamps');
+const { areFriends } = require('../services/friendships');
 
 const onlineUsers = new Map();
 const MAX_TEXT_LENGTH = 5000;
@@ -18,12 +19,6 @@ function emitToUser(io, userId, event, payload) {
   const socketIds = onlineUsers.get(userId);
   if (!socketIds) return;
   socketIds.forEach(socketId => io.to(socketId).emit(event, payload));
-}
-
-function areFriends(userId, friendId) {
-  return Boolean(db.prepare(
-    'SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?'
-  ).get(userId, friendId));
 }
 
 function requireActiveSocketUser(socket) {
@@ -181,7 +176,13 @@ function setupChatSocket(io) {
           UPDATE messages SET read = 1
           WHERE sender_id = ? AND receiver_id = ? AND read = 0 AND deleted = 0
         `).run(senderId, userId);
-        socket.emit('messages_read', { from: senderId, count: result.changes });
+        // 已读回执属于原发送方，必须投递给他而不是读取方自己
+        if (result.changes > 0) {
+          emitToUser(io, senderId, 'messages_read', {
+            from: userId,
+            count: result.changes
+          });
+        }
       } catch (error) {
         console.error('标记已读错误:', error);
       }
@@ -229,13 +230,9 @@ function disconnectUser(io, userId, reason = '账号状态已变更，请重新�
   return socketIds.length;
 }
 
-function isUserOnline(userId) {
-  return Boolean(onlineUsers.get(Number(userId))?.size);
-}
-
 module.exports = {
   setupChatSocket,
   disconnectUser,
-  isUserOnline,
+  emitToUser,
   normalizeMessage
 };

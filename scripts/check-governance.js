@@ -73,8 +73,8 @@ for (const marker of [
   'npm ci --prefix client --include=dev',
   'npm rebuild better-sqlite3',
   'npm run check',
-  'npm prune --omit=dev --package-lock=false',
-  'npm prune --omit=dev --prefix client --package-lock=false',
+  'npm ci --omit=dev',
+  'npm ci --prefix client --omit=dev',
   'LOCKFILE_FINGERPRINT_BEFORE',
   'LOCKFILE_FINGERPRINT_AFTER',
   '/api/health'

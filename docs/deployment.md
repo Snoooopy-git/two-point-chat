@@ -19,7 +19,7 @@
 5. 使用 lockfile 安装依赖。
 6. 在目标 Linux 执行 `npm rebuild better-sqlite3`。
 7. 执行完整质量门禁和前端构建。
-8. 裁剪开发依赖时禁止 npm 写入 lockfile，并验证根目录与客户端 lockfile 未发生变化。
+8. 质量门禁通过后，用 `npm ci --omit=dev` 分别按根目录和客户端 lockfile 精确重装生产依赖，再次重建 Linux 原生依赖；验证两个 lockfile 均未发生变化。
 9. 以 PM2 单实例 fork 模式更新进程。
 10. 验证健康检查、前端、关键 API 和数据库完整性。
 11. 记录部署版本、备份、验证和剩余风险。

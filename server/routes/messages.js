@@ -1,6 +1,8 @@
 const express = require('express');
 const db = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { emitToUser } = require('../socket/chat');
+const { areFriends } = require('../services/friendships');
 const { toUtcIsoTimestamp } = require('../utils/timestamps');
 
 const router = express.Router();
@@ -19,11 +21,7 @@ router.get('/:friendId', authMiddleware, (req, res) => {
       return res.status(400).json({ error: '分页游标无效' });
     }
     // 检查是否为好友关系
-    const friendship = db.prepare(
-      'SELECT id FROM friendships WHERE user_id = ? AND friend_id = ?'
-    ).get(req.userId, friendId);
-
-    if (!friendship) {
+    if (!areFriends(req.userId, friendId)) {
       return res.status(403).json({ error: '对方不是你的好友' });
     }
 
@@ -71,11 +69,22 @@ router.get('/unread/counts', authMiddleware, (req, res) => {
 // 标记来自某好友的消息为已读
 router.put('/:friendId/read', authMiddleware, (req, res) => {
   try {
-    const { friendId } = req.params;
-    db.prepare(`
+    const friendId = Number.parseInt(req.params.friendId, 10);
+    if (!Number.isInteger(friendId) || friendId <= 0) {
+      return res.status(400).json({ error: '好友 ID 无效' });
+    }
+    const result = db.prepare(`
       UPDATE messages SET read = 1
       WHERE sender_id = ? AND receiver_id = ? AND read = 0 AND deleted = 0
     `).run(friendId, req.userId);
+
+    // 已读回执属于原发送方，仅在状态真正发生变化时通知
+    if (result.changes > 0) {
+      emitToUser(req.app.get('io'), friendId, 'messages_read', {
+        from: req.userId,
+        count: result.changes
+      });
+    }
     res.json({ success: true });
   } catch (err) {
     console.error('标记已读错误:', err);

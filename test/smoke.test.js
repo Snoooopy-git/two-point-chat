@@ -46,6 +46,23 @@ function authorized(token, method = 'GET', body) {
   };
 }
 
+async function sendFriendRequest(requester, recipient) {
+  return request(
+    '/api/users/friend-requests',
+    authorized(requester.token, 'POST', { recipientId: recipient.user.id })
+  );
+}
+
+async function becomeFriends(requester, recipient) {
+  const sent = await sendFriendRequest(requester, recipient);
+  assert.ok([200, 201].includes(sent.response.status));
+  const accepted = await request(
+    `/api/users/friend-requests/${sent.body.request.id}/accept`,
+    authorized(recipient.token, 'PUT')
+  );
+  assert.equal(accepted.response.status, 200);
+}
+
 function waitForEvent(socket, event) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -151,35 +168,119 @@ test('administrator deletion and last active administrator are protected', async
   assert.match(disableLast.body.error, /最后一个/);
 });
 
-test('friendship creation is bidirectional, transactional and idempotent', async () => {
+test('friend request requires recipient approval and creates a bidirectional friendship', async () => {
   const first = await register('friend');
   const second = await register('friend');
 
-  const firstAttempt = await request(
-    '/api/users/friends',
-    authorized(first.token, 'POST', { friendId: second.user.id })
-  );
-  const secondAttempt = await request(
-    '/api/users/friends',
-    authorized(first.token, 'POST', { friendId: second.user.id })
-  );
+  const firstAttempt = await sendFriendRequest(first, second);
+  const secondAttempt = await sendFriendRequest(first, second);
   assert.equal(firstAttempt.response.status, 201);
   assert.equal(secondAttempt.response.status, 200);
+  assert.equal(firstAttempt.body.request.id, secondAttempt.body.request.id);
 
-  const rows = db.prepare(`
+  let rows = db.prepare(`
+    SELECT user_id, friend_id FROM friendships
+    WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+  `).all(first.user.id, second.user.id, second.user.id, first.user.id);
+  assert.equal(rows.length, 0);
+
+  const incoming = await request('/api/users/friend-requests', authorized(second.token));
+  assert.equal(incoming.response.status, 200);
+  assert.equal(incoming.body.incoming[0].user.id, first.user.id);
+
+  const accepted = await request(
+    `/api/users/friend-requests/${firstAttempt.body.request.id}/accept`,
+    authorized(second.token, 'PUT')
+  );
+  assert.equal(accepted.response.status, 200);
+
+  rows = db.prepare(`
     SELECT user_id, friend_id FROM friendships
     WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
   `).all(first.user.id, second.user.id, second.user.id, first.user.id);
   assert.equal(rows.length, 2);
 });
 
+test('friend requests enforce direction, ownership, rejection and cancellation', async () => {
+  const requester = await register('request-rules');
+  const recipient = await register('request-rules');
+  const outsider = await register('request-rules');
+
+  const sent = await sendFriendRequest(requester, recipient);
+  const reverse = await sendFriendRequest(recipient, requester);
+  assert.equal(reverse.response.status, 409);
+  assert.match(reverse.body.error, /已向你发送/);
+
+  const unauthorized = await request(
+    `/api/users/friend-requests/${sent.body.request.id}/accept`,
+    authorized(outsider.token, 'PUT')
+  );
+  assert.equal(unauthorized.response.status, 403);
+
+  const rejected = await request(
+    `/api/users/friend-requests/${sent.body.request.id}`,
+    authorized(recipient.token, 'DELETE')
+  );
+  assert.equal(rejected.response.status, 200);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM friendships
+    WHERE user_id IN (?, ?) AND friend_id IN (?, ?)
+  `).get(requester.user.id, recipient.user.id, requester.user.id, recipient.user.id).count, 0);
+
+  const resent = await sendFriendRequest(requester, recipient);
+  const cancelled = await request(
+    `/api/users/friend-requests/${resent.body.request.id}`,
+    authorized(requester.token, 'DELETE')
+  );
+  assert.equal(cancelled.response.status, 200);
+  assert.equal(
+    db.prepare('SELECT COUNT(*) AS count FROM friend_requests WHERE id = ?')
+      .get(resent.body.request.id).count,
+    0
+  );
+});
+
+test('friend request lifecycle emits realtime events', async () => {
+  const requester = await register('request-socket');
+  const recipient = await register('request-socket');
+  const requesterSocket = createSocket(baseUrl, {
+    auth: { token: requester.token },
+    transports: ['websocket'],
+    autoConnect: false
+  });
+  const recipientSocket = createSocket(baseUrl, {
+    auth: { token: recipient.token },
+    transports: ['websocket'],
+    autoConnect: false
+  });
+  const requesterConnected = waitForEvent(requesterSocket, 'connect');
+  const recipientConnected = waitForEvent(recipientSocket, 'connect');
+  requesterSocket.connect();
+  recipientSocket.connect();
+  await Promise.all([requesterConnected, recipientConnected]);
+
+  const receivedEvent = waitForEvent(recipientSocket, 'friend_request_received');
+  const sent = await sendFriendRequest(requester, recipient);
+  assert.equal((await receivedEvent).user.id, requester.user.id);
+
+  const resolvedEvent = waitForEvent(requesterSocket, 'friend_request_resolved');
+  const friendAddedEvent = waitForEvent(requesterSocket, 'friend_added');
+  const accepted = await request(
+    `/api/users/friend-requests/${sent.body.request.id}/accept`,
+    authorized(recipient.token, 'PUT')
+  );
+  assert.equal(accepted.response.status, 200);
+  assert.equal((await resolvedEvent).action, 'accepted');
+  assert.equal((await friendAddedEvent).friend.id, recipient.user.id);
+
+  requesterSocket.close();
+  recipientSocket.close();
+});
+
 test('history returns the newest page and uses a stable cursor', async () => {
   const first = await register('history');
   const second = await register('history');
-  await request(
-    '/api/users/friends',
-    authorized(first.token, 'POST', { friendId: second.user.id })
-  );
+  await becomeFriends(first, second);
 
   const insert = db.prepare(`
     INSERT INTO messages (sender_id, receiver_id, content)
@@ -218,10 +319,7 @@ test('history returns the newest page and uses a stable cursor', async () => {
 test('deleted messages are excluded from contact summaries', async () => {
   const first = await register('summary');
   const second = await register('summary');
-  await request(
-    '/api/users/friends',
-    authorized(first.token, 'POST', { friendId: second.user.id })
-  );
+  await becomeFriends(first, second);
   db.prepare(`
     INSERT INTO messages (sender_id, receiver_id, content, deleted)
     VALUES (?, ?, 'visible', 0), (?, ?, 'hidden', 1)
@@ -270,10 +368,7 @@ test('upload verifies actual image signature and generates a safe filename', asy
 test('Socket snapshot and client message ID make delivery reconnect-safe', async () => {
   const sender = await register('socket');
   const receiver = await register('socket');
-  await request(
-    '/api/users/friends',
-    authorized(sender.token, 'POST', { friendId: receiver.user.id })
-  );
+  await becomeFriends(sender, receiver);
 
   const receiverSocket = createSocket(baseUrl, {
     auth: { token: receiver.token },
@@ -323,4 +418,112 @@ test('Socket snapshot and client message ID make delivery reconnect-safe', async
 
   senderSocket.close();
   receiverSocket.close();
+});
+
+test('read cursor rejects a non-numeric friend id', async () => {
+  const user = await register('read-guard');
+
+  const invalid = await request(
+    '/api/messages/not-a-number/read',
+    authorized(user.token, 'PUT')
+  );
+  assert.equal(invalid.response.status, 400);
+  assert.match(invalid.body.error, /好友 ID/);
+
+  const missing = await request(
+    '/api/messages/0/read',
+    authorized(user.token, 'PUT')
+  );
+  assert.equal(missing.response.status, 400);
+});
+
+test('user search escapes LIKE wildcards and hides disabled accounts', async () => {
+  const searcher = await register('search');
+  const target = await register('search-visible');
+
+  const wildcard = await request('/api/users/search?q=%25', authorized(searcher.token));
+  assert.equal(wildcard.response.status, 200);
+  assert.deepEqual(wildcard.body.users, []);
+
+  const underscore = await request('/api/users/search?q=_', authorized(searcher.token));
+  assert.deepEqual(underscore.body.users, []);
+
+  const substring = await request('/api/users/search?q=visible', authorized(searcher.token));
+  assert.deepEqual(
+    substring.body.users.map(user => user.username),
+    [target.user.username]
+  );
+
+  db.prepare("UPDATE users SET status = 'disabled' WHERE id = ?").run(target.user.id);
+  const disabled = await request('/api/users/search?q=visible', authorized(searcher.token));
+  assert.deepEqual(disabled.body.users, []);
+});
+
+test('read receipts are delivered to the original sender', async () => {
+  const sender = await register('receipt');
+  const reader = await register('receipt');
+  await becomeFriends(sender, reader);
+
+  const senderSocket = createSocket(baseUrl, {
+    auth: { token: sender.token },
+    transports: ['websocket'],
+    autoConnect: false
+  });
+  const senderConnected = waitForEvent(senderSocket, 'connect');
+  senderSocket.connect();
+  await senderConnected;
+
+  // 路径 1：读取方通过 HTTP 标记已读
+  const httpConfirmation = waitForEvent(senderSocket, 'message_sent');
+  senderSocket.emit('private_message', {
+    to: reader.user.id,
+    content: 'http read receipt probe',
+    type: 'text',
+    clientMessageId: 'read-receipt-http-0001'
+  });
+  assert.equal((await httpConfirmation).read, 0);
+
+  const httpReceipt = waitForEvent(senderSocket, 'messages_read');
+  const markRead = await request(
+    `/api/messages/${sender.user.id}/read`,
+    authorized(reader.token, 'PUT')
+  );
+  assert.equal(markRead.response.status, 200);
+  const httpPayload = await httpReceipt;
+  assert.equal(httpPayload.from, reader.user.id);
+  assert.equal(httpPayload.count, 1);
+
+  // 路径 2：读取方通过 Socket 标记已读
+  const socketConfirmation = waitForEvent(senderSocket, 'message_sent');
+  senderSocket.emit('private_message', {
+    to: reader.user.id,
+    content: 'socket read receipt probe',
+    type: 'text',
+    clientMessageId: 'read-receipt-socket-0002'
+  });
+  await socketConfirmation;
+
+  const readerSocket = createSocket(baseUrl, {
+    auth: { token: reader.token },
+    transports: ['websocket'],
+    autoConnect: false
+  });
+  const readerConnected = waitForEvent(readerSocket, 'connect');
+  readerSocket.connect();
+  await readerConnected;
+
+  const socketReceipt = waitForEvent(senderSocket, 'messages_read');
+  readerSocket.emit('mark_read', { from: sender.user.id });
+  const socketPayload = await socketReceipt;
+  assert.equal(socketPayload.from, reader.user.id);
+  assert.equal(socketPayload.count, 1);
+
+  // 重复标记已读不应再产生回执
+  const duplicate = db.prepare(
+    "SELECT COUNT(*) AS count FROM messages WHERE receiver_id = ? AND read = 0"
+  ).get(reader.user.id);
+  assert.equal(duplicate.count, 0);
+
+  readerSocket.close();
+  senderSocket.close();
 });

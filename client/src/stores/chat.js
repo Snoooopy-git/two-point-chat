@@ -11,6 +11,8 @@ export const useChatStore = defineStore('chat', () => {
   const historyCursors = ref({});
   const loading = ref(false);
   const searchResults = ref([]);
+  const incomingFriendRequests = ref([]);
+  const outgoingFriendRequests = ref([]);
   const typingUsers = ref({});
   const unreadCounts = ref({});
 
@@ -30,6 +32,7 @@ export const useChatStore = defineStore('chat', () => {
   const totalUnread = computed(() =>
     Object.values(unreadCounts.value).reduce((sum, count) => sum + count, 0)
   );
+  const incomingRequestCount = computed(() => incomingFriendRequests.value.length);
   const sortedContacts = computed(() =>
     [...contacts.value].sort((a, b) => {
       const timeA = a.lastMessage ? new Date(a.lastMessage.created_at).getTime() : 0;
@@ -59,6 +62,10 @@ export const useChatStore = defineStore('chat', () => {
       online_users: handleOnlineSnapshot,
       friend_online: handleFriendOnline,
       friend_offline: handleFriendOffline,
+      messages_read: handleMessagesRead,
+      friend_request_received: handleFriendRequestChanged,
+      friend_request_resolved: handleFriendRequestChanged,
+      friend_added: handleFriendAdded,
       disconnect: handleSocketDisconnect
     };
     Object.entries(boundHandlers).forEach(([event, handler]) => {
@@ -81,6 +88,27 @@ export const useChatStore = defineStore('chat', () => {
     setUserOffline(userId);
   }
 
+  // 对方读取了发给他的消息：把该会话中我方已确认发出的消息标记为已读
+  function handleMessagesRead({ from: readerId }) {
+    const contactMessages = messages.value[readerId];
+    if (!contactMessages) return;
+    contactMessages.forEach(message => {
+      // 仍在发送中或发送失败的消息尚未被对方读到，不能提前标记
+      if (message.sender_id !== readerId && !message._temp && !message._error) {
+        message.read = 1;
+      }
+    });
+  }
+
+  function handleFriendRequestChanged() {
+    fetchFriendRequests();
+  }
+
+  function handleFriendAdded() {
+    fetchFriendRequests();
+    fetchContacts();
+  }
+
   function handleSocketDisconnect() {
     Object.values(messages.value).forEach(contactMessages => {
       contactMessages.filter(message => message._temp).forEach(message => {
@@ -98,6 +126,8 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = {};
     historyCursors.value = {};
     searchResults.value = [];
+    incomingFriendRequests.value = [];
+    outgoingFriendRequests.value = [];
     typingUsers.value = {};
     unreadCounts.value = {};
     onlineSnapshot = new Set();
@@ -140,14 +170,43 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function addFriend(friendId) {
+  async function fetchFriendRequests() {
     try {
-      const data = await api.post('/api/users/friends', { friendId });
-      await fetchContacts();
+      const data = await api.get('/api/users/friend-requests');
+      incomingFriendRequests.value = data.incoming || [];
+      outgoingFriendRequests.value = data.outgoing || [];
       return data;
     } catch (error) {
-      throw new Error(error.message || '添加好友失败', { cause: error });
+      console.error('获取好友申请失败:', error);
+      return null;
     }
+  }
+
+  async function sendFriendRequest(recipientId) {
+    const data = await api.post('/api/users/friend-requests', { recipientId });
+    await fetchFriendRequests();
+    const result = searchResults.value.find(user => user.id === recipientId);
+    if (result) result.relationship = 'outgoing_pending';
+    return data;
+  }
+
+  async function acceptFriendRequest(requestId) {
+    const request = incomingFriendRequests.value.find(item => item.id === requestId);
+    const data = await api.put(`/api/users/friend-requests/${requestId}/accept`);
+    await Promise.all([fetchFriendRequests(), fetchContacts()]);
+    const result = searchResults.value.find(user => user.id === request?.user.id);
+    if (result) result.relationship = 'friend';
+    return data;
+  }
+
+  async function removeFriendRequest(requestId) {
+    const request = [...incomingFriendRequests.value, ...outgoingFriendRequests.value]
+      .find(item => item.id === requestId);
+    const data = await api.delete(`/api/users/friend-requests/${requestId}`);
+    await fetchFriendRequests();
+    const result = searchResults.value.find(user => user.id === request?.user.id);
+    if (result) result.relationship = 'none';
+    return data;
   }
 
   async function fetchMessages(contactId, before = null) {
@@ -363,9 +422,12 @@ export const useChatStore = defineStore('chat', () => {
     historyCursors,
     loading,
     searchResults,
+    incomingFriendRequests,
+    outgoingFriendRequests,
     typingUsers,
     unreadCounts,
     totalUnread,
+    incomingRequestCount,
     activeContact,
     activeMessages,
     activeHistoryCursor,
@@ -375,7 +437,10 @@ export const useChatStore = defineStore('chat', () => {
     fetchContacts,
     fetchUnreadCounts,
     searchUsers,
-    addFriend,
+    fetchFriendRequests,
+    sendFriendRequest,
+    acceptFriendRequest,
+    removeFriendRequest,
     fetchMessages,
     loadOlderMessages,
     openChat,

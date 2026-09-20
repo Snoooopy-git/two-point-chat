@@ -32,6 +32,17 @@ db.exec(`
     UNIQUE(user_id, friend_id)
   );
 
+  CREATE TABLE IF NOT EXISTS friend_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_id INTEGER NOT NULL,
+    recipient_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (requester_id) REFERENCES users(id),
+    FOREIGN KEY (recipient_id) REFERENCES users(id),
+    UNIQUE(requester_id, recipient_id),
+    CHECK(requester_id != recipient_id)
+  );
+
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sender_id INTEGER NOT NULL,
@@ -65,6 +76,10 @@ const migrate = db.transaction(() => {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_friendships_user_friend
       ON friendships(user_id, friend_id);
+    CREATE INDEX IF NOT EXISTS idx_friend_requests_recipient_created
+      ON friend_requests(recipient_id, created_at, id);
+    CREATE INDEX IF NOT EXISTS idx_friend_requests_requester_created
+      ON friend_requests(requester_id, created_at, id);
     CREATE INDEX IF NOT EXISTS idx_messages_conversation
       ON messages(sender_id, receiver_id, created_at, id);
     CREATE INDEX IF NOT EXISTS idx_messages_unread

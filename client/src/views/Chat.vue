@@ -67,6 +67,13 @@
             <div class="message-meta">
               <time>{{ formatTime(msg.created_at) }}</time>
               <span v-if="msg._temp" class="sending-state">发送中</span>
+              <span
+                v-else-if="isSelf(msg) && !msg._error"
+                class="read-state"
+                :class="{ 'read-state-done': msg.read }"
+              >
+                {{ msg.read ? '已读' : '未读' }}
+              </span>
               <button
                 v-if="msg._error"
                 type="button"

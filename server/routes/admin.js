@@ -118,8 +118,11 @@ router.delete('/users/:id', (req, res) => {
       return res.status(400).json({ error: '不能删除管理员账号' });
     }
 
-    // 级联删除：好友关系 + 消息
+    // 级联删除：好友申请 + 好友关系 + 消息
     const transaction = db.transaction(() => {
+      db.prepare(
+        'DELETE FROM friend_requests WHERE requester_id = ? OR recipient_id = ?'
+      ).run(id, id);
       db.prepare('DELETE FROM friendships WHERE user_id = ? OR friend_id = ?').run(id, id);
       db.prepare('DELETE FROM messages WHERE sender_id = ? OR receiver_id = ?').run(id, id);
       db.prepare('DELETE FROM users WHERE id = ?').run(id);

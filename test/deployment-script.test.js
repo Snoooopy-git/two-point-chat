@@ -8,19 +8,20 @@ const deployScript = fs.readFileSync(
   'utf8'
 );
 
-test('deployment installs quality-gate dependencies before pruning them', () => {
+test('deployment validates with development dependencies before an exact production install', () => {
   const rootInstall = deployScript.indexOf('npm ci --include=dev');
   const clientInstall = deployScript.indexOf('npm ci --prefix client --include=dev');
   const qualityGate = deployScript.indexOf('npm run check');
-  const rootPrune = deployScript.indexOf(
-    'npm prune --omit=dev --package-lock=false'
+  const rootProductionInstall = deployScript.indexOf(
+    'npm ci --omit=dev'
   );
-  const clientPrune = deployScript.indexOf(
-    'npm prune --omit=dev --prefix client --package-lock=false'
+  const clientProductionInstall = deployScript.indexOf(
+    'npm ci --prefix client --omit=dev'
   );
   const lockfileGate = deployScript.indexOf(
     'LOCKFILE_FINGERPRINT_AFTER='
   );
+  const productionRebuild = deployScript.lastIndexOf('npm rebuild better-sqlite3');
   const processReload = deployScript.indexOf(
     'pm2 startOrReload ecosystem.config.js --update-env'
   );
@@ -29,8 +30,9 @@ test('deployment installs quality-gate dependencies before pruning them', () => 
     rootInstall,
     clientInstall,
     qualityGate,
-    rootPrune,
-    clientPrune,
+    rootProductionInstall,
+    clientProductionInstall,
+    productionRebuild,
     lockfileGate,
     processReload
   ]) {
@@ -39,10 +41,13 @@ test('deployment installs quality-gate dependencies before pruning them', () => 
 
   assert.ok(rootInstall < qualityGate);
   assert.ok(clientInstall < qualityGate);
-  assert.ok(qualityGate < rootPrune);
-  assert.ok(qualityGate < clientPrune);
-  assert.ok(rootPrune < lockfileGate);
-  assert.ok(clientPrune < lockfileGate);
+  assert.ok(qualityGate < rootProductionInstall);
+  assert.ok(qualityGate < clientProductionInstall);
+  assert.ok(rootProductionInstall < lockfileGate);
+  assert.ok(clientProductionInstall < lockfileGate);
+  assert.ok(rootProductionInstall < productionRebuild);
+  assert.ok(clientProductionInstall < productionRebuild);
+  assert.ok(productionRebuild < lockfileGate);
   assert.ok(lockfileGate < processReload);
 });
 
@@ -57,6 +62,6 @@ test('deployment rejects lockfile mutations before updating PM2', () => {
   );
   assert.match(
     deployScript,
-    /依赖安装或裁剪修改了 lockfile，拒绝更新 PM2 进程。/
+    /依赖安装修改了 lockfile，拒绝更新 PM2 进程。/
   );
 });

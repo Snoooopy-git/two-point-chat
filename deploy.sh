@@ -85,13 +85,14 @@ npm rebuild better-sqlite3
 echo "[4/7] 执行完整质量门禁"
 npm run check
 
-echo "[5/7] 移除生产不需要的开发依赖"
-npm prune --omit=dev --package-lock=false
-npm prune --omit=dev --prefix client --package-lock=false
+echo "[5/7] 按 lockfile 精确安装生产依赖"
+npm ci --omit=dev
+npm ci --prefix client --omit=dev
+npm rebuild better-sqlite3
 
 LOCKFILE_FINGERPRINT_AFTER="$(sha256sum -- package-lock.json client/package-lock.json)"
 if [[ "$LOCKFILE_FINGERPRINT_AFTER" != "$LOCKFILE_FINGERPRINT_BEFORE" ]]; then
-  echo "依赖安装或裁剪修改了 lockfile，拒绝更新 PM2 进程。" >&2
+  echo "依赖安装修改了 lockfile，拒绝更新 PM2 进程。" >&2
   exit 1
 fi
 
