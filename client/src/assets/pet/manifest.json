@@ -1,0 +1,371 @@
+{
+  "character": "跳跳信使 / Pixel Hopper",
+  "version": 1,
+  "canvas": [
+    512,
+    512
+  ],
+  "format": "RGBA PNG + lossless animated WebP",
+  "actions": [
+    {
+      "name": "click-reaction",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/click-reaction/click-reaction-00.png",
+        "frames/click-reaction/click-reaction-01.png",
+        "frames/click-reaction/click-reaction-02.png",
+        "frames/click-reaction/click-reaction-03.png",
+        "frames/click-reaction/click-reaction-04.png",
+        "frames/click-reaction/click-reaction-05.png",
+        "frames/click-reaction/click-reaction-06.png",
+        "frames/click-reaction/click-reaction-07.png"
+      ],
+      "atlas": "atlases/click-reaction-atlas.png",
+      "preview": "previews/click-reaction.webp"
+    },
+    {
+      "name": "drag-held",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/drag-held/drag-held-00.png",
+        "frames/drag-held/drag-held-01.png",
+        "frames/drag-held/drag-held-02.png",
+        "frames/drag-held/drag-held-03.png",
+        "frames/drag-held/drag-held-04.png",
+        "frames/drag-held/drag-held-05.png",
+        "frames/drag-held/drag-held-06.png",
+        "frames/drag-held/drag-held-07.png"
+      ],
+      "atlas": "atlases/drag-held-atlas.png",
+      "preview": "previews/drag-held.webp"
+    },
+    {
+      "name": "happy-hop",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/happy-hop/happy-hop-00.png",
+        "frames/happy-hop/happy-hop-01.png",
+        "frames/happy-hop/happy-hop-02.png",
+        "frames/happy-hop/happy-hop-03.png",
+        "frames/happy-hop/happy-hop-04.png",
+        "frames/happy-hop/happy-hop-05.png",
+        "frames/happy-hop/happy-hop-06.png",
+        "frames/happy-hop/happy-hop-07.png"
+      ],
+      "atlas": "atlases/happy-hop-atlas.png",
+      "preview": "previews/happy-hop.webp"
+    },
+    {
+      "name": "idle-breathe",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/idle-breathe/idle-breathe-00.png",
+        "frames/idle-breathe/idle-breathe-01.png",
+        "frames/idle-breathe/idle-breathe-02.png",
+        "frames/idle-breathe/idle-breathe-03.png",
+        "frames/idle-breathe/idle-breathe-04.png",
+        "frames/idle-breathe/idle-breathe-05.png",
+        "frames/idle-breathe/idle-breathe-06.png",
+        "frames/idle-breathe/idle-breathe-07.png"
+      ],
+      "atlas": "atlases/idle-breathe-atlas.png",
+      "preview": "previews/idle-breathe.webp"
+    },
+    {
+      "name": "new-message-alert",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": false,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/new-message-alert/new-message-alert-00.png",
+        "frames/new-message-alert/new-message-alert-01.png",
+        "frames/new-message-alert/new-message-alert-02.png",
+        "frames/new-message-alert/new-message-alert-03.png",
+        "frames/new-message-alert/new-message-alert-04.png",
+        "frames/new-message-alert/new-message-alert-05.png",
+        "frames/new-message-alert/new-message-alert-06.png",
+        "frames/new-message-alert/new-message-alert-07.png"
+      ],
+      "atlas": "atlases/new-message-alert-atlas.png",
+      "preview": "previews/new-message-alert.webp"
+    },
+    {
+      "name": "pointer-follow",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/pointer-follow/pointer-follow-00.png",
+        "frames/pointer-follow/pointer-follow-01.png",
+        "frames/pointer-follow/pointer-follow-02.png",
+        "frames/pointer-follow/pointer-follow-03.png",
+        "frames/pointer-follow/pointer-follow-04.png",
+        "frames/pointer-follow/pointer-follow-05.png",
+        "frames/pointer-follow/pointer-follow-06.png",
+        "frames/pointer-follow/pointer-follow-07.png"
+      ],
+      "atlas": "atlases/pointer-follow-atlas.png",
+      "preview": "previews/pointer-follow.webp"
+    },
+    {
+      "name": "response-complete",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/response-complete/response-complete-00.png",
+        "frames/response-complete/response-complete-01.png",
+        "frames/response-complete/response-complete-02.png",
+        "frames/response-complete/response-complete-03.png",
+        "frames/response-complete/response-complete-04.png",
+        "frames/response-complete/response-complete-05.png",
+        "frames/response-complete/response-complete-06.png",
+        "frames/response-complete/response-complete-07.png"
+      ],
+      "atlas": "atlases/response-complete-atlas.png",
+      "preview": "previews/response-complete.webp"
+    },
+    {
+      "name": "sleep-transition",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": false,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/sleep-transition/sleep-transition-00.png",
+        "frames/sleep-transition/sleep-transition-01.png",
+        "frames/sleep-transition/sleep-transition-02.png",
+        "frames/sleep-transition/sleep-transition-03.png",
+        "frames/sleep-transition/sleep-transition-04.png",
+        "frames/sleep-transition/sleep-transition-05.png",
+        "frames/sleep-transition/sleep-transition-06.png",
+        "frames/sleep-transition/sleep-transition-07.png"
+      ],
+      "atlas": "atlases/sleep-transition-atlas.png",
+      "preview": "previews/sleep-transition.webp"
+    },
+    {
+      "name": "typing",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/typing/typing-00.png",
+        "frames/typing/typing-01.png",
+        "frames/typing/typing-02.png",
+        "frames/typing/typing-03.png",
+        "frames/typing/typing-04.png",
+        "frames/typing/typing-05.png",
+        "frames/typing/typing-06.png",
+        "frames/typing/typing-07.png"
+      ],
+      "atlas": "atlases/typing-atlas.png",
+      "preview": "previews/typing.webp"
+    },
+    {
+      "name": "waiting-reply",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/waiting-reply/waiting-reply-00.png",
+        "frames/waiting-reply/waiting-reply-01.png",
+        "frames/waiting-reply/waiting-reply-02.png",
+        "frames/waiting-reply/waiting-reply-03.png",
+        "frames/waiting-reply/waiting-reply-04.png",
+        "frames/waiting-reply/waiting-reply-05.png",
+        "frames/waiting-reply/waiting-reply-06.png",
+        "frames/waiting-reply/waiting-reply-07.png"
+      ],
+      "atlas": "atlases/waiting-reply-atlas.png",
+      "preview": "previews/waiting-reply.webp"
+    },
+    {
+      "name": "walk-cycle",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/walk-cycle/walk-cycle-00.png",
+        "frames/walk-cycle/walk-cycle-01.png",
+        "frames/walk-cycle/walk-cycle-02.png",
+        "frames/walk-cycle/walk-cycle-03.png",
+        "frames/walk-cycle/walk-cycle-04.png",
+        "frames/walk-cycle/walk-cycle-05.png",
+        "frames/walk-cycle/walk-cycle-06.png",
+        "frames/walk-cycle/walk-cycle-07.png"
+      ],
+      "atlas": "atlases/walk-cycle-atlas.png",
+      "preview": "previews/walk-cycle.webp"
+    },
+    {
+      "name": "wave-hello",
+      "frameCount": 8,
+      "frameSize": [
+        512,
+        512
+      ],
+      "atlasGrid": [
+        4,
+        2
+      ],
+      "durationMs": 110,
+      "loop": true,
+      "anchor": [
+        0.5,
+        0.88
+      ],
+      "frames": [
+        "frames/wave-hello/wave-hello-00.png",
+        "frames/wave-hello/wave-hello-01.png",
+        "frames/wave-hello/wave-hello-02.png",
+        "frames/wave-hello/wave-hello-03.png",
+        "frames/wave-hello/wave-hello-04.png",
+        "frames/wave-hello/wave-hello-05.png",
+        "frames/wave-hello/wave-hello-06.png",
+        "frames/wave-hello/wave-hello-07.png"
+      ],
+      "atlas": "atlases/wave-hello-atlas.png",
+      "preview": "previews/wave-hello.webp"
+    }
+  ]
+}

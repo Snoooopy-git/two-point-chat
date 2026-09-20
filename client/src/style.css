@@ -549,13 +549,18 @@ svg {
 /* Workspace shell */
 .workspace-shell {
   display: grid;
-  grid-template-columns: 350px minmax(0, 1fr);
+  grid-template-columns: 350px minmax(0, 1fr) 0;
   width: 100%;
   height: 100dvh;
   overflow: hidden;
   background:
     radial-gradient(circle at 80% 10%, var(--brand-soft), transparent 34%),
     var(--canvas);
+  transition: grid-template-columns 220ms var(--ease);
+}
+
+.workspace-shell.utility-open {
+  grid-template-columns: 350px minmax(0, 1fr) 320px;
 }
 
 .workspace-sidebar {
@@ -965,6 +970,273 @@ svg {
 .workspace-content {
   min-width: 0;
   min-height: 0;
+  border-right: 1px solid var(--border);
+}
+
+/* Utility rail */
+.utility-rail {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden auto;
+  padding: 18px 16px 16px;
+  background: color-mix(in srgb, var(--sidebar) 92%, var(--canvas));
+  transition: opacity 180ms var(--ease), transform 220ms var(--ease);
+}
+
+.utility-rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 3px;
+}
+
+.utility-rail-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.utility-rail-header strong {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.utility-toggle,
+.utility-backdrop {
+  display: none;
+}
+
+.utility-close {
+  display: inline-flex;
+}
+
+.mini-calendar,
+.pet-stage {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.mini-calendar {
+  flex: 0 0 auto;
+  padding: 16px;
+  border-radius: 20px;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.calendar-header h2 {
+  margin: 3px 0 0;
+  font-size: 16px;
+  letter-spacing: -0.025em;
+}
+
+.calendar-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.calendar-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: var(--input);
+  border: 0;
+  border-radius: 8px;
+  font-size: 18px;
+}
+
+.calendar-actions .calendar-today {
+  width: auto;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.calendar-weekdays {
+  margin-bottom: 5px;
+  color: var(--text-tertiary);
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.calendar-day {
+  position: relative;
+  display: grid;
+  aspect-ratio: 1;
+  place-items: center;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.calendar-day:hover {
+  color: var(--text);
+  background: var(--input-hover);
+}
+
+.calendar-day.muted {
+  color: var(--text-tertiary);
+  opacity: 0.45;
+}
+
+.calendar-day.today {
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand);
+}
+
+.calendar-day.selected {
+  color: white;
+  background: var(--brand);
+  box-shadow: 0 5px 12px var(--brand-soft);
+}
+
+.calendar-selection {
+  margin: 11px 2px 0;
+  color: var(--text-tertiary);
+  text-align: right;
+  font-size: 9px;
+}
+
+.pet-stage {
+  position: relative;
+  min-height: 310px;
+  flex: 1 0 310px;
+  overflow: hidden;
+  border-radius: 22px;
+  isolation: isolate;
+  touch-action: none;
+}
+
+.pet-stage::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  background:
+    radial-gradient(circle at 50% 78%, var(--brand-soft), transparent 35%),
+    linear-gradient(to bottom, transparent 60%, color-mix(in srgb, var(--brand-soft) 45%, transparent));
+}
+
+.pet-stage-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 17px 17px 0;
+  pointer-events: none;
+}
+
+.pet-status {
+  padding: 5px 8px;
+  color: var(--text-tertiary);
+  background: var(--input);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.pet-ground {
+  position: absolute;
+  right: 15%;
+  bottom: 47px;
+  left: 15%;
+  height: 18px;
+  background: radial-gradient(ellipse, rgba(73, 61, 54, 0.13), transparent 68%);
+  border-radius: 50%;
+}
+
+.desktop-pet {
+  --pet-flip: 1;
+  position: absolute;
+  z-index: 1;
+  width: clamp(180px, 76%, 230px);
+  aspect-ratio: 1;
+  padding: 0;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-size: 400% 200%;
+  border: 0;
+  outline: 0;
+  filter: drop-shadow(0 12px 10px rgba(72, 62, 57, 0.12));
+  transform: translate(-50%, -50%) scaleX(var(--pet-flip));
+  transition: left 2.8s ease-in-out, top 220ms var(--ease), filter 160ms var(--ease);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.desktop-pet.mirrored {
+  --pet-flip: -1;
+}
+
+.desktop-pet:hover,
+.desktop-pet:focus-visible {
+  filter: drop-shadow(0 15px 13px rgba(72, 62, 57, 0.16));
+}
+
+.desktop-pet:focus-visible {
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.desktop-pet.dragging {
+  filter: drop-shadow(0 18px 15px rgba(72, 62, 57, 0.2));
+  transition: none;
+  cursor: grabbing;
+}
+
+.pet-hint {
+  position: absolute;
+  right: 0;
+  bottom: 14px;
+  left: 0;
+  margin: 0;
+  color: var(--text-tertiary);
+  text-align: center;
+  font-size: 9px;
+  pointer-events: none;
+}
+
+.utility-signal {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  background: var(--danger);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
 }
 
 /* Empty workspace */
@@ -1821,6 +2093,219 @@ emoji-picker {
 }
 
 /* Responsive */
+@media (max-width: 1399px) and (min-width: 1200px) {
+  .workspace-shell.utility-open {
+    grid-template-columns: 320px minmax(0, 1fr) 300px;
+  }
+
+  .utility-rail {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .workspace-shell:not(.utility-open) .utility-rail {
+    visibility: hidden;
+    padding-right: 0;
+    padding-left: 0;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(100%);
+  }
+
+  .workspace-shell:not(.utility-open) .utility-toggle {
+    position: fixed;
+    z-index: 30;
+    top: 18px;
+    right: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    color: white;
+    background: var(--brand);
+    border: 0;
+    border-radius: 15px;
+    box-shadow: 0 12px 30px var(--brand-glow);
+  }
+
+  .workspace-shell:not(.utility-open) .utility-toggle svg {
+    width: 21px;
+    height: 21px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+  }
+}
+
+@media (min-width: 1200px) and (max-height: 800px) {
+  .utility-rail {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .utility-rail-header {
+    min-height: 36px;
+  }
+
+  .mini-calendar {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .calendar-header {
+    margin-bottom: 8px;
+  }
+
+  .calendar-header h2 {
+    font-size: 14px;
+  }
+
+  .calendar-actions button {
+    width: 25px;
+    height: 25px;
+  }
+
+  .calendar-actions .calendar-today {
+    width: auto;
+  }
+
+  .calendar-weekdays,
+  .calendar-grid {
+    gap: 2px;
+  }
+
+  .calendar-selection {
+    margin-top: 6px;
+  }
+
+  .pet-stage {
+    min-height: 250px;
+    flex: 1 1 250px;
+    border-radius: 18px;
+  }
+
+  .pet-stage-header {
+    padding: 12px 12px 0;
+  }
+
+  .desktop-pet {
+    width: clamp(160px, 68%, 200px);
+  }
+
+  .pet-ground {
+    bottom: 38px;
+  }
+
+  .pet-hint {
+    bottom: 9px;
+  }
+}
+
+@media (min-width: 1200px) and (max-height: 680px) {
+  .utility-rail {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .mini-calendar {
+    padding: 10px 12px;
+  }
+
+  .calendar-header {
+    margin-bottom: 6px;
+  }
+
+  .calendar-selection {
+    display: none;
+  }
+
+  .pet-stage {
+    min-height: 230px;
+    flex-basis: 230px;
+  }
+}
+
+@media (max-width: 1199px) {
+  .workspace-shell,
+  .workspace-shell.utility-open {
+    grid-template-columns: 350px minmax(0, 1fr);
+  }
+
+  .workspace-content {
+    border-right: 0;
+  }
+
+  .utility-rail {
+    position: fixed;
+    z-index: 42;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(360px, calc(100vw - 42px));
+    padding: 18px 17px;
+    border-left: 1px solid var(--border);
+    box-shadow: -18px 0 44px rgba(20, 24, 45, 0.12);
+    transform: translateX(105%);
+    transition: transform 220ms var(--ease);
+  }
+
+  .workspace-shell.utility-open .utility-rail {
+    transform: translateX(0);
+  }
+
+  .utility-close {
+    display: inline-flex;
+  }
+
+  .utility-toggle {
+    position: fixed;
+    z-index: 30;
+    right: 18px;
+    bottom: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    color: white;
+    background: var(--brand);
+    border: 0;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px var(--brand-glow);
+  }
+
+  .utility-toggle svg {
+    width: 21px;
+    height: 21px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+  }
+
+  .workspace-shell.utility-open .utility-toggle {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .utility-backdrop {
+    position: fixed;
+    z-index: 41;
+    inset: 0;
+    display: block;
+    padding: 0;
+    background: rgba(17, 20, 31, 0.38);
+    border: 0;
+    backdrop-filter: blur(5px);
+  }
+}
+
 @media (max-width: 900px) {
   .auth-stage {
     grid-template-columns: 1fr minmax(330px, 410px);
@@ -2123,6 +2608,32 @@ emoji-picker {
 
   .workspace-shell.conversation-open .workspace-content {
     display: block;
+  }
+
+  .utility-rail {
+    width: 100%;
+    padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+    border-left: 0;
+  }
+
+  .utility-toggle {
+    right: 14px;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+  }
+
+  .workspace-shell.conversation-open .utility-toggle {
+    bottom: max(84px, calc(env(safe-area-inset-bottom) + 72px));
+  }
+
+  .mini-calendar {
+    padding: 15px;
+  }
+
+  .pet-stage {
+    min-height: 330px;
   }
 
   .sidebar-header {

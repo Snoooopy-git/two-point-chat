@@ -1,5 +1,11 @@
 <template>
-  <main class="workspace-shell" :class="{ 'conversation-open': route.name === 'Chat' }">
+  <main
+    class="workspace-shell"
+    :class="{
+      'conversation-open': route.name === 'Chat',
+      'utility-open': utilityOpen
+    }"
+  >
     <aside class="workspace-sidebar">
       <header class="sidebar-header">
         <BrandLogo />
@@ -115,18 +121,41 @@
       <router-view />
     </section>
 
+    <button
+      type="button"
+      class="utility-toggle"
+      aria-label="打开日历和桌面宠物"
+      :aria-expanded="utilityOpen"
+      @click="utilityOpen = !utilityOpen"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="4" y="5.5" width="16" height="14" rx="3" />
+        <path d="M8 3.5v4M16 3.5v4M4 10h16" />
+      </svg>
+      <span v-if="chatStore.totalUnread" class="utility-signal"></span>
+    </button>
+    <button
+      v-if="utilityOpen"
+      type="button"
+      class="utility-backdrop"
+      aria-label="关闭工具面板"
+      @click="utilityOpen = false"
+    ></button>
+    <UtilityRail :open="utilityOpen" @close="utilityOpen = false" />
+
     <FriendRequestDialog v-if="friendDialogOpen" @close="friendDialogOpen = false" />
   </main>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { useChatStore } from '../stores/chat.js';
 import BrandLogo from '../components/BrandLogo.vue';
 import FriendRequestDialog from '../components/FriendRequestDialog.vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
+import UtilityRail from '../components/UtilityRail.vue';
 import { version as appVersion } from '../../package.json';
 
 const route = useRoute();
@@ -134,11 +163,39 @@ const router = useRouter();
 const authStore = useAuthStore();
 const chatStore = useChatStore();
 const friendDialogOpen = ref(false);
+const utilityPreferenceKey = 'two-point-utility-panel-open';
+const desktopUtilityQuery = window.matchMedia('(min-width: 1200px)');
+const isDesktopUtility = ref(desktopUtilityQuery.matches);
+const utilityOpen = ref(
+  desktopUtilityQuery.matches && localStorage.getItem(utilityPreferenceKey) !== 'false'
+);
 const userAvatar = computed(() => (authStore.user?.username || 'U')[0].toUpperCase());
 
 onMounted(async () => {
+  window.addEventListener('keydown', handleEscape);
+  desktopUtilityQuery.addEventListener('change', handleUtilityBreakpointChange);
   await Promise.all([chatStore.fetchContacts(), chatStore.fetchFriendRequests()]);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleEscape);
+  desktopUtilityQuery.removeEventListener('change', handleUtilityBreakpointChange);
+});
+
+watch(utilityOpen, value => {
+  if (isDesktopUtility.value) localStorage.setItem(utilityPreferenceKey, String(value));
+});
+
+function handleUtilityBreakpointChange(event) {
+  isDesktopUtility.value = event.matches;
+  utilityOpen.value = event.matches
+    ? localStorage.getItem(utilityPreferenceKey) !== 'false'
+    : false;
+}
+
+function handleEscape(event) {
+  if (event.key === 'Escape') utilityOpen.value = false;
+}
 
 function openChat(userId) {
   router.push(`/chat/${userId}`);

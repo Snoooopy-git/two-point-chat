@@ -15,6 +15,8 @@ export const useChatStore = defineStore('chat', () => {
   const outgoingFriendRequests = ref([]);
   const typingUsers = ref({});
   const unreadCounts = ref({});
+  const incomingMessageSignal = ref(0);
+  const outgoingMessageSignal = ref(0);
 
   let boundSocket = null;
   let boundHandlers = {};
@@ -130,6 +132,8 @@ export const useChatStore = defineStore('chat', () => {
     outgoingFriendRequests.value = [];
     typingUsers.value = {};
     unreadCounts.value = {};
+    incomingMessageSignal.value = 0;
+    outgoingMessageSignal.value = 0;
     onlineSnapshot = new Set();
   }
 
@@ -283,6 +287,7 @@ export const useChatStore = defineStore('chat', () => {
       fileUrl,
       clientMessageId
     });
+    outgoingMessageSignal.value += 1;
     return true;
   }
 
@@ -295,6 +300,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function receiveMessage(message) {
+    incomingMessageSignal.value += 1;
     const contactId = message.from;
     messages.value[contactId] ||= [];
     if (!messages.value[contactId].some(item => item.id === message.id)) {
@@ -426,6 +432,8 @@ export const useChatStore = defineStore('chat', () => {
     outgoingFriendRequests,
     typingUsers,
     unreadCounts,
+    incomingMessageSignal,
+    outgoingMessageSignal,
     totalUnread,
     incomingRequestCount,
     activeContact,

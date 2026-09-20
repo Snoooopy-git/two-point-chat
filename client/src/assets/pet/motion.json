@@ -1,0 +1,22 @@
+{
+  "defaultSequence": [0, 1, 2, 3, 4, 5, 6, 7],
+  "idleSequence": [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1, 2, 3, 4, 5, 6, 7, 6, 5, 4, 3, 2, 1,
+    0, 0, 0, 0, 0, 0, 0, 0
+  ],
+  "intervals": {
+    "click-reaction": 150,
+    "drag-held": 180,
+    "happy-hop": 150,
+    "idle-breathe": 180,
+    "new-message-alert": 160,
+    "pointer-follow": 180,
+    "response-complete": 170,
+    "sleep-transition": 190,
+    "typing": 190,
+    "waiting-reply": 200,
+    "walk-cycle": 160,
+    "wave-hello": 170
+  }
+}
