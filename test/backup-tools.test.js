@@ -21,7 +21,12 @@ test('online backup and recovery drill preserve a valid database', async () => {
         role TEXT,
         status TEXT
       );
-      CREATE TABLE friendships (id INTEGER PRIMARY KEY);
+      CREATE TABLE friendships (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        friend_id INTEGER
+      );
+      CREATE TABLE friend_requests (id INTEGER PRIMARY KEY);
       CREATE TABLE messages (id INTEGER PRIMARY KEY);
       INSERT INTO users VALUES (1, 'recovery-user', 'admin', 'active');
     `);

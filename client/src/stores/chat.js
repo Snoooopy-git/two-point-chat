@@ -6,6 +6,8 @@ import { showBrowserNotification } from '../utils/notifications.js';
 
 export const useChatStore = defineStore('chat', () => {
   const contacts = ref([]);
+  const contactsStatus = ref('idle');
+  const contactsError = ref(null);
   const activeContactId = ref(null);
   const messages = ref({});
   const historyCursors = ref({});
@@ -124,6 +126,8 @@ export const useChatStore = defineStore('chat', () => {
   function resetState() {
     detachSocketListeners();
     contacts.value = [];
+    contactsStatus.value = 'idle';
+    contactsError.value = null;
     activeContactId.value = null;
     messages.value = {};
     historyCursors.value = {};
@@ -138,15 +142,24 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function fetchContacts() {
+    contactsStatus.value = 'loading';
+    contactsError.value = null;
     try {
       const data = await api.get('/api/users/friends');
       contacts.value = data.friends.map(friend => ({
         ...friend,
         online: onlineSnapshot.has(friend.id)
       }));
+      contactsStatus.value = 'success';
       await fetchUnreadCounts();
+      return data;
     } catch (error) {
       console.error('获取好友列表失败:', error);
+      contactsStatus.value = 'error';
+      contactsError.value = error.status === 401
+        ? '登录已过期，请重新登录'
+        : '好友列表加载失败，请稍后重试';
+      return null;
     }
   }
 
@@ -423,6 +436,8 @@ export const useChatStore = defineStore('chat', () => {
 
   return {
     contacts,
+    contactsStatus,
+    contactsError,
     activeContactId,
     messages,
     historyCursors,

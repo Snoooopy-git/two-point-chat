@@ -25,7 +25,10 @@
           <p>登录你的 two-point 账号</p>
         </div>
 
-        <div v-if="authStore.error" class="auth-error" role="alert">{{ authStore.error }}</div>
+        <div v-if="authStore.sessionExpired" class="auth-error" role="alert">
+          登录已过期，请重新登录。好友和聊天记录不会受影响。
+        </div>
+        <div v-else-if="authStore.error" class="auth-error" role="alert">{{ authStore.error }}</div>
 
         <form @submit.prevent="handleLogin" class="auth-form">
           <div class="form-group">

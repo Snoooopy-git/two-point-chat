@@ -1,6 +1,19 @@
 // HTTP 请求封装
 
 const BASE_URL = ''; // 同源请求，由 Vite 代理或 Express 托管
+let unauthorizedHandler = null;
+
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = typeof handler === 'function' ? handler : null;
+}
 
 function getToken() {
   return localStorage.getItem('token');
@@ -25,7 +38,9 @@ async function request(url, options = {}) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.error || '请求失败');
+    const error = new ApiError(data.error || '请求失败', response.status);
+    if (response.status === 401) unauthorizedHandler?.(error);
+    throw error;
   }
 
   return data;
@@ -64,7 +79,9 @@ export const api = {
     }).then(async (response) => {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || '图片上传失败');
+        const error = new ApiError(data.error || '图片上传失败', response.status);
+        if (response.status === 401) unauthorizedHandler?.(error);
+        throw error;
       }
       if (typeof data.fileUrl !== 'string') {
         throw new Error('上传响应格式无效');

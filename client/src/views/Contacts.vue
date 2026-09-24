@@ -74,7 +74,25 @@
           </div>
         </div>
 
-        <div v-if="chatStore.contacts.length === 0" class="sidebar-empty">
+        <div
+          v-if="chatStore.contactsStatus === 'idle' || chatStore.contactsStatus === 'loading'"
+          class="sidebar-empty"
+          aria-live="polite"
+        >
+          <span class="sidebar-loader" aria-hidden="true"></span>
+          <strong>正在加载好友</strong>
+        </div>
+
+        <div v-else-if="chatStore.contactsStatus === 'error'" class="sidebar-empty" role="alert">
+          <div class="empty-symbol">!</div>
+          <strong>暂时无法显示好友</strong>
+          <span>{{ chatStore.contactsError }}</span>
+          <button type="button" class="sidebar-retry" @click="chatStore.fetchContacts()">
+            重新加载
+          </button>
+        </div>
+
+        <div v-else-if="chatStore.contacts.length === 0" class="sidebar-empty">
           <div class="empty-symbol">＋</div>
           <strong>还没有朋友</strong>
           <span>点击消息标题旁的加号，添加第一位朋友。</span>

@@ -853,6 +853,27 @@ svg {
   line-height: 1.6;
 }
 
+.sidebar-loader {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+.sidebar-retry {
+  margin-top: 14px;
+  padding: 8px 13px;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 0;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .contact-list {
   min-height: 0;
   overflow: hidden auto;
