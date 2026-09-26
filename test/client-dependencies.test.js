@@ -38,3 +38,20 @@ test('client pins PostCSS outside GHSA-r28c-9q8g-f849 range', () => {
     `PostCSS ${postcss.version} is vulnerable to GHSA-r28c-9q8g-f849`
   );
 });
+
+test('client dependency floors exclude known parser and generator advisories', () => {
+  const parser = clientLock.packages['node_modules/socket.io-parser'];
+  const nanoid = clientLock.packages['node_modules/nanoid'];
+
+  assert.equal(clientPackage.dependencies['socket.io-client'], '^4.8.4');
+  assert.ok(parser, 'client lockfile must contain socket.io-parser');
+  assert.ok(nanoid, 'client lockfile must contain nanoid');
+  assert.ok(
+    isVersionAtLeast(parser.version, '4.2.7'),
+    `socket.io-parser ${parser.version} is vulnerable to GHSA-2m8v-j782-fhvr`
+  );
+  assert.ok(
+    isVersionAtLeast(nanoid.version, '3.3.18'),
+    `nanoid ${nanoid.version} is vulnerable to GHSA-2v37-7h3g-55p8`
+  );
+});

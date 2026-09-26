@@ -331,6 +331,13 @@ test('deleted messages are excluded from contact summaries', async () => {
 });
 
 test('upload verifies actual image signature and generates a safe filename', async () => {
+  const unauthenticated = await fetch(`${baseUrl}/api/upload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'multipart/form-data; boundary=broken' },
+    body: '--broken\r\nmalformed'
+  });
+  assert.equal(unauthenticated.status, 401);
+
   const user = await register('upload');
   const validForm = new FormData();
   validForm.append(
