@@ -93,6 +93,7 @@
       <div class="composer-shell">
         <ImageUpload @uploaded="handleImageUploaded" />
         <button
+          ref="emojiButtonRef"
           type="button"
           class="composer-icon"
           :class="{ active: showEmoji }"
@@ -108,6 +109,7 @@
         </button>
         <EmojiPicker
           :visible="showEmoji"
+          :anchor-element="emojiButtonRef"
           @select="insertEmoji"
           @close="showEmoji = false"
         />
@@ -137,6 +139,8 @@
       <div class="composer-hint">Enter 发送 · Shift + Enter 换行</div>
     </footer>
 
+    <FloatingWoodenFish />
+
     <div
       v-if="previewUrl"
       class="image-preview-overlay"
@@ -160,6 +164,7 @@ import { useUiStore } from '../stores/ui.js';
 import { getSocket } from '../utils/socket.js';
 import ImageUpload from '../components/ImageUpload.vue';
 import EmojiPicker from '../components/EmojiPicker.vue';
+import FloatingWoodenFish from '../components/FloatingWoodenFish.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -170,6 +175,7 @@ const uiStore = useUiStore();
 const inputText = ref('');
 const messageListRef = ref(null);
 const inputRef = ref(null);
+const emojiButtonRef = ref(null);
 const previewUrl = ref(null);
 const showEmoji = ref(false);
 
